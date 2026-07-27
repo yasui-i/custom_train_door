@@ -149,11 +149,11 @@ my_train_door.zip
 
 ### 可用 MapColor
 
-`none`, `grass`, `sand`, `wool`, `fire`, `ice`, `metal`, `plant`, `snow`, `clay`, `dirt`, `stone`, `water`, `wood`, `quartz`, `gold`, `diamond`, `lapis`, `emerald`, `nether`, `color_orange`, `color_light_blue`, `color_yellow`, `color_pink`, `color_gray`, `color_light_gray`, `color_cyan`, `color_purple`, `color_blue`, `color_brown`, `color_green`, `color_red`, `color_black`, 等
+`none` `grass` `sand` `wool` `fire` `ice` `metal` `plant` `snow` `clay` `dirt` `stone` `water` `wood` `quartz` `gold` `diamond` `lapis` `emerald` `nether` `color_orange` `color_light_blue` `color_yellow` `color_pink` `color_gray` `color_light_gray` `color_cyan` `color_purple` `color_blue` `color_brown` `color_green` `color_red` `color_black` 等
 
 ### 可用 SoundType
 
-`wood`, `stone`, `metal`, `glass`, `wool`, `sand`, `gravel`, `netherite_block`, `anvil`, `slime_block`, `copper`, `deepslate`, `amethyst`, `bamboo`, 等
+`wood` `stone` `metal` `glass` `wool` `sand` `gravel` `netherite_block` `anvil` `slime_block` `copper` `deepslate` `amethyst` `bamboo` 等
 
 ---
 
