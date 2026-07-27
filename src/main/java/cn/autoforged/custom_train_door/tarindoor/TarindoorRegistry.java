@@ -80,7 +80,7 @@ public class TarindoorRegistry {
 
             if (seOpen != null) {
                 ResourceLocation rl = ResourceLocation.parse(seOpen);
-                open = () -> BuiltInRegistries.SOUND_EVENT.get(rl);
+                open = existingSoundOrFallback(rl, BlockSetType.IRON.doorOpen());
             } else {
                 open = SOUND_EVENTS.register(
                         id + "_door_open",
@@ -91,7 +91,7 @@ public class TarindoorRegistry {
 
             if (seClose != null) {
                 ResourceLocation rl = ResourceLocation.parse(seClose);
-                close = () -> BuiltInRegistries.SOUND_EVENT.get(rl);
+                close = existingSoundOrFallback(rl, BlockSetType.IRON.doorClose());
             } else {
                 close = SOUND_EVENTS.register(
                         id + "_door_close",
@@ -104,6 +104,13 @@ public class TarindoorRegistry {
             closeSounds.put(id, close);
         }
         SOUND_EVENTS.register(bus);
+    }
+
+    private static Supplier<SoundEvent> existingSoundOrFallback(ResourceLocation id, SoundEvent fallback) {
+        return () -> {
+            SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(id);
+            return sound != null ? sound : fallback;
+        };
     }
 
     @SuppressWarnings("unchecked")
