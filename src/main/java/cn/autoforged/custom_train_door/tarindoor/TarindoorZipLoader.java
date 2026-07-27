@@ -3,13 +3,16 @@ package cn.autoforged.custom_train_door.tarindoor;
 import com.google.gson.*;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.material.MapColor;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -21,6 +24,10 @@ public class TarindoorZipLoader {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("custom_train_door/Tarindoor");
     private static final Gson GSON = new Gson();
+    private static final Pattern DOOR_ID = Pattern.compile("[a-z0-9_]{1,48}");
+    private static final Pattern LOCALE_ID = Pattern.compile("[a-z0-9_]{2,16}");
+    private static final Set<String> RESERVED_IDS = Set.of("cr400bf", "crh2a");
+    private static final int MAX_JSON_BYTES = 256 * 1024;
 
     /** Path to the tarindoor folder. */
     public static Path getTarindoorDir() {
@@ -86,16 +93,19 @@ public class TarindoorZipLoader {
                 return null;
             }
 
-            JsonObject root;
-            try (InputStream is = zip.getInputStream(jsonEntry);
-                 Reader reader = new InputStreamReader(is)) {
-                root = GSON.fromJson(reader, JsonObject.class);
+            byte[] jsonBytes = readEntryBytes(zip, jsonEntry, MAX_JSON_BYTES);
+            JsonObject root = GSON.fromJson(
+                    new String(jsonBytes, StandardCharsets.UTF_8), JsonObject.class);
+            if (root == null) {
+                LOGGER.warn("{} contains an empty door.json", zipPath.getFileName());
+                return null;
             }
 
             // 2. Parse required fields
             String id = getString(root, "id");
-            if (id == null || id.isEmpty()) {
-                LOGGER.warn("{} door.json missing 'id'", zipPath.getFileName());
+            if (id == null || !DOOR_ID.matcher(id).matches() || RESERVED_IDS.contains(id)) {
+                LOGGER.warn("{} has invalid or reserved door id '{}'; expected [a-z0-9_] and at most 48 characters",
+                        zipPath.getFileName(), id);
                 return null;
             }
 
@@ -104,7 +114,9 @@ public class TarindoorZipLoader {
             if (root.has("name") && root.get("name").isJsonObject()) {
                 JsonObject nameObj = root.getAsJsonObject("name");
                 for (Map.Entry<String, JsonElement> e : nameObj.entrySet()) {
-                    names.put(e.getKey(), e.getValue().getAsString());
+                    if (LOCALE_ID.matcher(e.getKey()).matches() && e.getValue().isJsonPrimitive()) {
+                        names.put(e.getKey(), e.getValue().getAsString());
+                    }
                 }
             }
 
@@ -123,11 +135,127 @@ public class TarindoorZipLoader {
             // 8. Validate texture files exist in zip
             for (String tex : new String[]{"side.png", "top.png", "bottom.png"}) {
                 if (zip.getEntry(tex) == null) {
-                    LOGGER.warn("{} missing texture {}", zipPath.getFileName(), tex);
+                    LOGGER.warn("{} missing required texture {}, skipping", zipPath.getFileName(), tex);
+                    return null;
                 }
             }
 
-            return new TarindoorDefinition(id, names, animConfig, renderConfig, blockConfig, recipeConfig);
+            TarindoorDefinition definition =
+                    new TarindoorDefinition(id, Map.copyOf(names), animConfig, renderConfig, blockConfig, recipeConfig);
+            validateDefinition(definition);
+            validateReferencedSound(zip, zipPath, definition.block().soundEventOpen(),
+                    definition.block().openSoundFileName(), "open");
+            validateReferencedSound(zip, zipPath, definition.block().soundEventClose(),
+                    definition.block().closeSoundFileName(), "close");
+            return definition;
+        }
+    }
+
+    private static void validateReferencedSound(ZipFile zip, Path zipPath, String soundEvent,
+                                                String fileName, String action) throws IOException {
+        if (soundEvent == null && fileName != null && zip.getEntry(fileName) == null) {
+            throw new IOException(zipPath.getFileName() + " references missing " + action
+                    + " sound file " + fileName);
+        }
+    }
+
+    private static void validateDefinition(TarindoorDefinition def) {
+        if (def.animation().type() == TarindoorDefinition.AnimationType.LERPED) {
+            requireFiniteRange("animation.speed", def.animation().lerpedSpeed(), 0.000001, 1.0);
+        } else {
+            validatePhases("animation.opening", def.animation().openingPhases());
+            validatePhases("animation.closing", def.animation().closingPhases());
+        }
+        requireFiniteRange("render.slide_scale", def.render().slideScale(), 0.0, 4.0);
+        requireFiniteRange("render.depth_push.clamp_multiplier",
+                def.render().depthPushClampMultiplier(), 0.0, 100.0);
+        requireFiniteRange("render.depth_push.scale", def.render().depthPushScale(), -4.0, 4.0);
+        requireFiniteRange("block.hardness", def.block().hardness(), 0.0, 10000.0);
+        requireFiniteRange("block.resistance", def.block().resistance(), 0.0, 10000.0);
+
+        validateResourceLocation("block.sound_event.open", def.block().soundEventOpen());
+        validateResourceLocation("block.sound_event.close", def.block().soundEventClose());
+        validateZipEntryName("block.open_sound_file", def.block().openSoundFileName());
+        validateZipEntryName("block.close_sound_file", def.block().closeSoundFileName());
+        validateRecipe(def.recipe());
+    }
+
+    private static void validatePhases(String field, List<TarindoorDefinition.AnimationPhase> phases) {
+        if (phases.isEmpty()) {
+            throw new IllegalArgumentException(field + " must contain at least one phase");
+        }
+        long total = 0;
+        for (TarindoorDefinition.AnimationPhase phase : phases) {
+            if (phase.durationTicks() <= 0) {
+                throw new IllegalArgumentException(field + " durations must be positive");
+            }
+            total += phase.durationTicks();
+        }
+        if (total > 20L * 60L * 10L) {
+            throw new IllegalArgumentException(field + " is longer than 10 minutes");
+        }
+    }
+
+    private static void validateRecipe(TarindoorDefinition.TarindoorRecipeConfig recipe) {
+        if (recipe == null) return;
+        if (recipe.pattern().isEmpty() || recipe.pattern().size() > 3) {
+            throw new IllegalArgumentException("recipe.pattern must contain 1 to 3 rows");
+        }
+        int width = recipe.pattern().getFirst().length();
+        if (width < 1 || width > 3) {
+            throw new IllegalArgumentException("recipe.pattern width must be 1 to 3");
+        }
+        Set<Character> usedKeys = new HashSet<>();
+        for (String row : recipe.pattern()) {
+            if (row.length() != width) {
+                throw new IllegalArgumentException("recipe.pattern rows must have equal width");
+            }
+            row.chars().mapToObj(c -> (char) c).filter(c -> c != ' ').forEach(usedKeys::add);
+        }
+        if (!recipe.keys().keySet().containsAll(usedKeys)) {
+            throw new IllegalArgumentException("recipe.keys is missing a symbol used by recipe.pattern");
+        }
+        for (Map.Entry<Character, String> entry : recipe.keys().entrySet()) {
+            if (entry.getKey() == ' ' || ResourceLocation.tryParse(entry.getValue()) == null) {
+                throw new IllegalArgumentException("recipe.keys contains an invalid ingredient");
+            }
+        }
+        if (recipe.count() < 1 || recipe.count() > 64) {
+            throw new IllegalArgumentException("recipe.count must be between 1 and 64");
+        }
+    }
+
+    private static void validateResourceLocation(String field, String value) {
+        if (value != null && ResourceLocation.tryParse(value) == null) {
+            throw new IllegalArgumentException(field + " is not a valid resource location");
+        }
+    }
+
+    private static void validateZipEntryName(String field, String value) {
+        if (value == null) return;
+        Path path = Path.of(value).normalize();
+        if (path.isAbsolute() || value.contains("\\") || value.startsWith("/")
+                || path.startsWith("..") || value.isBlank()) {
+            throw new IllegalArgumentException(field + " is not a safe ZIP entry name");
+        }
+    }
+
+    private static void requireFiniteRange(String field, double value, double min, double max) {
+        if (!Double.isFinite(value) || value < min || value > max) {
+            throw new IllegalArgumentException(field + " must be between " + min + " and " + max);
+        }
+    }
+
+    private static byte[] readEntryBytes(ZipFile zip, ZipEntry entry, int maxBytes) throws IOException {
+        if (entry.getSize() > maxBytes) {
+            throw new IOException(entry.getName() + " exceeds " + maxBytes + " bytes");
+        }
+        try (InputStream input = zip.getInputStream(entry)) {
+            byte[] data = input.readNBytes(maxBytes + 1);
+            if (data.length > maxBytes) {
+                throw new IOException(entry.getName() + " exceeds " + maxBytes + " bytes");
+            }
+            return data;
         }
     }
 
