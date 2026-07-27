@@ -1,0 +1,26 @@
+{
+    "cr400bf_door_open": {
+        "subtitle": "subtitles.custom_train_door.cr400bf_door_open",
+        "sounds": [
+            "custom_train_door:cr400bf_sounds/cr400bf_door_open"
+        ]
+    },
+    "cr400bf_door_close": {
+        "subtitle": "subtitles.custom_train_door.cr400bf_door_close",
+        "sounds": [
+            "custom_train_door:cr400bf_sounds/cr400bf_door_close"
+        ]
+    },
+    "crh2a_door_open": {
+        "subtitle": "subtitles.custom_train_door.crh2a_door_open",
+        "sounds": [
+            "custom_train_door:crh2a_sounds/crh2a_door_open"
+        ]
+    },
+    "crh2a_door_close": {
+        "subtitle": "subtitles.custom_train_door.crh2a_door_close",
+        "sounds": [
+            "custom_train_door:crh2a_sounds/crh2a_door_close"
+        ]
+    }
+}

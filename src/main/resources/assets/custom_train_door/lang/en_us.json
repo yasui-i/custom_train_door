@@ -1,0 +1,9 @@
+{
+    "itemGroup.custom_train_door": "Custom Train Door",
+    "block.custom_train_door.cr400bf_door": "CR400BF Train Door",
+    "subtitles.custom_train_door.cr400bf_door_open": "Train door opens",
+    "subtitles.custom_train_door.cr400bf_door_close": "Train door closes",
+    "block.custom_train_door.crh2a_door": "CRH2A Train Door",
+    "subtitles.custom_train_door.crh2a_door_open": "Train door opens",
+    "subtitles.custom_train_door.crh2a_door_close": "Train door closes"
+}

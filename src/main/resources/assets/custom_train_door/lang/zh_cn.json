@@ -1,0 +1,9 @@
+{
+    "itemGroup.custom_train_door": "自定义列车门",
+    "block.custom_train_door.cr400bf_door": "CR400BF 列车门",
+    "subtitles.custom_train_door.cr400bf_door_open": "列车门：开启",
+    "subtitles.custom_train_door.cr400bf_door_close": "列车门：关闭",
+    "block.custom_train_door.crh2a_door": "CRH2A 列车门",
+    "subtitles.custom_train_door.crh2a_door_open": "列车门：开启",
+    "subtitles.custom_train_door.crh2a_door_close": "列车门：关闭"
+}
