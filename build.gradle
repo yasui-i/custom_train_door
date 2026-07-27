@@ -223,14 +223,14 @@ tasks.register('extractBundledLibs', Copy) {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
-compileJava.dependsOn extractBundledLibs
-
 dependencies {
     // 所有依赖 JAR 放入 libs/ 文件夹：
     //   - create-neoforge-1.21.1-*.jar  (Create 主体 / main mod)
-    //   - Catnip-NeoForge-1.21.1-*.jar   (Create 依赖)
-    // Flywheel + Ponder 从 Create JAR 自动提取，无需手动放入
-    implementation fileTree(dir: libsDir, include: ['*.jar'])
+    // Ponder 已包含本项目需要的 Catnip 类。不要再把独立 Catnip JAR
+    // 加入模块路径，否则两者会导出相同包并导致 Java 模块解析失败。
+    implementation fileTree(dir: libsDir, include: ['create-*.jar'])
     implementation fileTree(dir: bundledLibsDir, include: ['*.jar'])
 }
+
+compileJava.dependsOn extractBundledLibs
 // AutoForge: end mod addon dependencies

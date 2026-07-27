@@ -30,7 +30,7 @@ import java.util.zip.ZipFile;
 public class TarindoorResourcePack implements PackResources {
 
     private static final String NAMESPACE = CustomTrainDoorMod.MODID;
-    private static final Set<String> STATIC_DOOR_IDS = Set.of("cr400bf", "crh2a");
+    private static final int MAX_RESOURCE_BYTES = 32 * 1024 * 1024;
     private final Map<String, byte[]> cache = new ConcurrentHashMap<>();
 
     @Override
@@ -43,7 +43,8 @@ public class TarindoorResourcePack implements PackResources {
         if (!NAMESPACE.equals(location.getNamespace())) return null;
 
         String path = location.getPath();
-        byte[] data = cache.computeIfAbsent(path, this::loadResource);
+        String cacheKey = packType.name() + ":" + path;
+        byte[] data = cache.computeIfAbsent(cacheKey, ignored -> loadResource(packType, path));
         if (data != null) {
             byte[] d = data;
             return () -> new ByteArrayInputStream(d);
@@ -55,8 +56,18 @@ public class TarindoorResourcePack implements PackResources {
     public void listResources(PackType packType, String namespace, String prefix, ResourceOutput output) {
         if (!NAMESPACE.equals(namespace)) return;
 
-        // Static doors + Dynamic doors
-        Set<String> allIds = new LinkedHashSet<>(STATIC_DOOR_IDS);
+        if (packType == PackType.SERVER_DATA) {
+            for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
+                if (def.recipe() != null) {
+                    accept(prefix, output, "recipe/" + def.id() + "_door.json", getRecipeJson(def));
+                }
+            }
+            return;
+        }
+
+        // Only publish resources for ZIP-defined doors. Built-in doors are supplied
+        // by src/main/resources and must not be shadowed by this higher-priority pack.
+        Set<String> allIds = new LinkedHashSet<>();
         for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
             allIds.add(def.id());
         }
@@ -66,28 +77,17 @@ public class TarindoorResourcePack implements PackResources {
 
             // Blockstate JSON
             byte[] bsData = getBlockstateJson(id);
-            output.accept(
-                    ResourceLocation.fromNamespaceAndPath(namespace, "blockstates/" + doorName),
-                    () -> new ByteArrayInputStream(bsData));
+            accept(prefix, output, "blockstates/" + doorName + ".json", bsData);
 
             // Block Models
             byte[] bottomModel = getModelJson(id, "bottom");
-            output.accept(
-                    ResourceLocation.fromNamespaceAndPath(namespace, "models/block/" + doorName + "_bottom"),
-                    () -> new ByteArrayInputStream(bottomModel));
+            accept(prefix, output, "models/block/" + doorName + "_bottom.json", bottomModel);
             byte[] topModel = getModelJson(id, "top");
-            output.accept(
-                    ResourceLocation.fromNamespaceAndPath(namespace, "models/block/" + doorName + "_top"),
-                    () -> new ByteArrayInputStream(topModel));
+            accept(prefix, output, "models/block/" + doorName + "_top.json", topModel);
 
             // Item Model (inventory icon)
             byte[] itemModel = getItemModelJson(id);
-            output.accept(
-                    ResourceLocation.fromNamespaceAndPath(namespace, "models/item/" + doorName),
-                    () -> new ByteArrayInputStream(itemModel));
-
-            // Static doors: textures are in src/main/resources
-            if (STATIC_DOOR_IDS.contains(id)) continue;
+            accept(prefix, output, "models/item/" + doorName + ".json", itemModel);
 
             TarindoorDefinition def = TarindoorRegistry.getDefinition(id);
             if (def == null) continue;
@@ -96,10 +96,7 @@ public class TarindoorResourcePack implements PackResources {
             for (String tex : new String[]{"side", "top", "bottom"}) {
                 byte[] texData = loadFromZip(def, tex + ".png");
                 if (texData != null) {
-                    byte[] d = texData;
-                    output.accept(
-                            ResourceLocation.fromNamespaceAndPath(namespace, "textures/block/" + id + "_" + tex),
-                            () -> new ByteArrayInputStream(d));
+                    accept(prefix, output, "textures/block/" + id + "_" + tex + ".png", texData);
                 }
             }
 
@@ -107,28 +104,28 @@ public class TarindoorResourcePack implements PackResources {
             if (def.block().soundEventOpen() == null && def.block().openSoundFileName() != null) {
                 byte[] sndData = loadFromZip(def, def.block().openSoundFileName());
                 if (sndData != null) {
-                    byte[] d = sndData;
-                    output.accept(
-                            ResourceLocation.fromNamespaceAndPath(namespace, "sounds/" + id + "_door_open"),
-                            () -> new ByteArrayInputStream(d));
+                    accept(prefix, output, "sounds/" + id + "_door_open.ogg", sndData);
                 }
             }
             if (def.block().soundEventClose() == null && def.block().closeSoundFileName() != null) {
                 byte[] sndData = loadFromZip(def, def.block().closeSoundFileName());
                 if (sndData != null) {
-                    byte[] d = sndData;
-                    output.accept(
-                            ResourceLocation.fromNamespaceAndPath(namespace, "sounds/" + id + "_door_close"),
-                            () -> new ByteArrayInputStream(d));
+                    accept(prefix, output, "sounds/" + id + "_door_close.ogg", sndData);
                 }
             }
         }
 
-        // Dynamic sounds.json
-        byte[] sndJson = getDynamicSoundsJson();
+        accept(prefix, output, "sounds.json", getDynamicSoundsJson());
+        for (String locale : getLocales()) {
+            accept(prefix, output, "lang/" + locale + ".json", getLanguageJson(locale));
+        }
+    }
+
+    private static void accept(String prefix, ResourceOutput output, String path, byte[] data) {
+        if (!path.startsWith(prefix)) return;
         output.accept(
-                ResourceLocation.fromNamespaceAndPath(namespace, "sounds_tarindoor_dynamic"),
-                () -> new ByteArrayInputStream(sndJson));
+                ResourceLocation.fromNamespaceAndPath(NAMESPACE, path),
+                () -> new ByteArrayInputStream(data));
     }
 
     @Override
@@ -163,7 +160,20 @@ public class TarindoorResourcePack implements PackResources {
     // --- Resource loading ---
 
     @Nullable
-    private byte[] loadResource(String path) {
+    private byte[] loadResource(PackType packType, String path) {
+        if (packType == PackType.SERVER_DATA) {
+            if (path.startsWith("recipe/") && path.endsWith("_door.json")) {
+                String id = path.substring("recipe/".length(), path.length() - "_door.json".length());
+                TarindoorDefinition def = TarindoorRegistry.getDefinition(id);
+                if (def != null && def.recipe() != null) return getRecipeJson(def);
+            }
+            return null;
+        }
+        if ("sounds.json".equals(path)) return getDynamicSoundsJson();
+        if (path.startsWith("lang/") && path.endsWith(".json")) {
+            String locale = path.substring("lang/".length(), path.length() - ".json".length());
+            if (getLocales().contains(locale)) return getLanguageJson(locale);
+        }
         String id;
         // models/item/{id}_door.json
         if (path.startsWith("models/item/") && path.endsWith(".json")) {
@@ -220,7 +230,7 @@ public class TarindoorResourcePack implements PackResources {
     }
 
     private boolean isKnownDoor(String id) {
-        return STATIC_DOOR_IDS.contains(id) || TarindoorRegistry.getDefinition(id) != null;
+        return TarindoorRegistry.getDefinition(id) != null;
     }
 
     // --- JSON generators ---
@@ -237,6 +247,19 @@ public class TarindoorResourcePack implements PackResources {
                         String key = String.format("facing=%s,half=%s,hinge=%s,open=%s", dir, half, hinge, open);
                         JsonObject variant = new JsonObject();
                         variant.addProperty("model", modelNs + "_" + (half.equals("lower") ? "bottom" : "top"));
+                        int y = switch (dir) {
+                            case "east" -> 0;
+                            case "south" -> 90;
+                            case "west" -> 180;
+                            case "north" -> 270;
+                            default -> 0;
+                        };
+                        if ("true".equals(open)) {
+                            y += 90;
+                            if ("right".equals(hinge)) y += 180;
+                        }
+                        y %= 360;
+                        if (y != 0) variant.addProperty("y", y);
                         variants.add(key, variant);
                     }
                 }
@@ -249,6 +272,7 @@ public class TarindoorResourcePack implements PackResources {
     private static byte[] getModelJson(String id, String half) {
         JsonObject root = new JsonObject();
         root.addProperty("parent", "minecraft:block/block");
+        root.addProperty("render_type", "minecraft:cutout_mipped");
         JsonObject textures = new JsonObject();
         textures.addProperty("0", NAMESPACE + ":block/" + id + "_side");
         textures.addProperty("2", NAMESPACE + ":block/" + id + "_" + half);
@@ -267,7 +291,9 @@ public class TarindoorResourcePack implements PackResources {
             JsonArray uv = new JsonArray();
             uv.add(0); uv.add(half.equals("top") ? 4 : 12);
             uv.add(16); uv.add(half.equals("top") ? 7 : 15);
-            face.add("uv", uv); face.addProperty("texture", "#0");
+            face.add("uv", uv);
+            face.addProperty("rotation", half.equals("top") ? 90 : 270);
+            face.addProperty("texture", "#0");
             faces.add(dir, face);
         }
         for (String dir : new String[]{"east", "west"}) {
@@ -279,12 +305,12 @@ public class TarindoorResourcePack implements PackResources {
         if (half.equals("top")) {
             JsonObject face = new JsonObject();
             JsonArray uv = new JsonArray(); uv.add(0); uv.add(0); uv.add(16); uv.add(3);
-            face.add("uv", uv); face.addProperty("texture", "#0");
+            face.add("uv", uv); face.addProperty("rotation", 90); face.addProperty("texture", "#0");
             faces.add("up", face);
         } else {
             JsonObject face = new JsonObject();
             JsonArray uv = new JsonArray(); uv.add(0); uv.add(8); uv.add(16); uv.add(11);
-            face.add("uv", uv); face.addProperty("texture", "#0");
+            face.add("uv", uv); face.addProperty("rotation", 90); face.addProperty("texture", "#0");
             faces.add("down", face);
         }
         element.add("faces", faces);
@@ -304,15 +330,69 @@ public class TarindoorResourcePack implements PackResources {
         for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
             String id = def.id();
             String sk = "subtitles." + NAMESPACE + "." + id + "_door";
-            JsonObject e = new JsonObject();
-            e.addProperty("subtitle", sk + "_open");
-            JsonArray a = new JsonArray(); a.add(NAMESPACE + ":" + id + "_door_open");
-            e.add("sounds", a); root.add(id + "_door_open", e);
-            e = new JsonObject();
-            e.addProperty("subtitle", sk + "_close");
-            a = new JsonArray(); a.add(NAMESPACE + ":" + id + "_door_close");
-            e.add("sounds", a); root.add(id + "_door_close", e);
+            if (def.block().soundEventOpen() == null && def.block().openSoundFileName() != null) {
+                JsonObject e = new JsonObject();
+                e.addProperty("subtitle", sk + "_open");
+                JsonArray a = new JsonArray(); a.add(NAMESPACE + ":" + id + "_door_open");
+                e.add("sounds", a); root.add(id + "_door_open", e);
+            }
+            if (def.block().soundEventClose() == null && def.block().closeSoundFileName() != null) {
+                JsonObject e = new JsonObject();
+                e.addProperty("subtitle", sk + "_close");
+                JsonArray a = new JsonArray(); a.add(NAMESPACE + ":" + id + "_door_close");
+                e.add("sounds", a); root.add(id + "_door_close", e);
+            }
         }
+        return toBytes(root);
+    }
+
+    private static Set<String> getLocales() {
+        Set<String> locales = new LinkedHashSet<>();
+        locales.add("en_us");
+        for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
+            locales.addAll(def.localizedNames().keySet());
+        }
+        return locales;
+    }
+
+    private static byte[] getLanguageJson(String locale) {
+        JsonObject root = new JsonObject();
+        for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
+            String name = def.localizedNames().get(locale);
+            if (name == null && "en_us".equals(locale)) name = def.displayName();
+            if (name != null) {
+                root.addProperty("block." + NAMESPACE + "." + def.id() + "_door", name);
+            }
+            String subtitle = "subtitles." + NAMESPACE + "." + def.id() + "_door";
+            if (def.block().soundEventOpen() == null && def.block().openSoundFileName() != null) {
+                root.addProperty(subtitle + "_open", "Train door opens");
+            }
+            if (def.block().soundEventClose() == null && def.block().closeSoundFileName() != null) {
+                root.addProperty(subtitle + "_close", "Train door closes");
+            }
+        }
+        return toBytes(root);
+    }
+
+    private static byte[] getRecipeJson(TarindoorDefinition def) {
+        TarindoorDefinition.TarindoorRecipeConfig recipe = def.recipe();
+        JsonObject root = new JsonObject();
+        root.addProperty("type", "minecraft:crafting_shaped");
+        root.addProperty("category", "redstone");
+        JsonArray pattern = new JsonArray();
+        recipe.pattern().forEach(pattern::add);
+        root.add("pattern", pattern);
+        JsonObject key = new JsonObject();
+        recipe.keys().forEach((symbol, ingredient) -> {
+            JsonObject ingredientObject = new JsonObject();
+            ingredientObject.addProperty("item", ingredient);
+            key.add(symbol.toString(), ingredientObject);
+        });
+        root.add("key", key);
+        JsonObject result = new JsonObject();
+        result.addProperty("id", NAMESPACE + ":" + def.id() + "_door");
+        result.addProperty("count", recipe.count());
+        root.add("result", result);
         return toBytes(root);
     }
 
@@ -323,7 +403,11 @@ public class TarindoorResourcePack implements PackResources {
         try (ZipFile zip = new ZipFile(zipPath.toFile())) {
             var entry = zip.getEntry(entryName);
             if (entry == null) return null;
-            try (InputStream is = zip.getInputStream(entry)) { return is.readAllBytes(); }
+            if (entry.getSize() > MAX_RESOURCE_BYTES) return null;
+            try (InputStream is = zip.getInputStream(entry)) {
+                byte[] data = is.readNBytes(MAX_RESOURCE_BYTES + 1);
+                return data.length <= MAX_RESOURCE_BYTES ? data : null;
+            }
         } catch (IOException e) { return null; }
     }
 

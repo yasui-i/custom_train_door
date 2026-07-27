@@ -83,23 +83,23 @@ public abstract class SlidingDoorMovementBehaviourMixin {
                         var snd = TarindoorRegistry.getOpenSound(id);
                         if (snd != null) {
                             context.world.playSound(null, BlockPos.containing(context.position),
-                                    snd.get(), SoundSource.BLOCKS, 0.125F, 1.0F);
+                                    snd.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
                         }
                     } else {
                         var snd = TarindoorRegistry.getCloseSound(id);
                         if (snd != null) {
                             context.world.playSound(null, BlockPos.containing(context.position),
-                                    snd.get(), SoundSource.BLOCKS, 0.125F, 1.0F);
+                                    snd.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
                         }
                     }
                 } else if (shouldOpen) {
                     context.world.playSound(null, BlockPos.containing(context.position),
                             isCRH2A ? ModSounds.CRH2A_DOOR_OPEN.get() : ModSounds.CR400BF_DOOR_OPEN.get(),
-                            SoundSource.BLOCKS, 0.125F, 1.0F);
+                            SoundSource.BLOCKS, 1.0F, 1.0F);
                 } else {
                     context.world.playSound(null, BlockPos.containing(context.position),
                             isCRH2A ? ModSounds.CRH2A_DOOR_CLOSE.get() : ModSounds.CR400BF_DOOR_CLOSE.get(),
-                            SoundSource.BLOCKS, 0.125F, 1.0F);
+                            SoundSource.BLOCKS, 1.0F, 1.0F);
                 }
             }
         }

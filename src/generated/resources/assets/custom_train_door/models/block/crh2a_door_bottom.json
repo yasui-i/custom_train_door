@@ -1,0 +1,61 @@
+{
+  "parent": "minecraft:block/block",
+  "elements": [
+    {
+      "faces": {
+        "down": {
+          "rotation": 90,
+          "texture": "#0",
+          "uv": [
+            0.0,
+            8.0,
+            16.0,
+            11.0
+          ]
+        },
+        "east": {
+          "texture": "#2"
+        },
+        "north": {
+          "rotation": 270,
+          "texture": "#0",
+          "uv": [
+            0.0,
+            12.0,
+            16.0,
+            15.0
+          ]
+        },
+        "south": {
+          "rotation": 270,
+          "texture": "#0",
+          "uv": [
+            0.0,
+            12.0,
+            16.0,
+            15.0
+          ]
+        },
+        "west": {
+          "texture": "#2"
+        }
+      },
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        3,
+        16,
+        16
+      ]
+    }
+  ],
+  "render_type": "minecraft:cutout_mipped",
+  "textures": {
+    "0": "custom_train_door:block/crh2a_door_side",
+    "2": "custom_train_door:block/crh2a_door_bottom",
+    "particle": "custom_train_door:block/crh2a_door_bottom"
+  }
+}
