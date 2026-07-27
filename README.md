@@ -1,172 +1,191 @@
-# 自定义列车门
+# Custom Train Door / 自定义列车门
 
-为 Minecraft 添加真实的列车滑动门，支持原版红石控制、手动交互，以及 Create 机械动力模组的列车联动。
+[中文](#中文) · [English](#english) · [自定义门包 / Custom Door Packs](#自定义门包--custom-door-packs)
 
----
+Custom Train Door 是一个面向 Minecraft 1.21.1 与 Create 的 NeoForge 模组，提供具有独立模型、动画和音效的列车滑动门。
 
-## 内置车门
+Custom Train Door is a NeoForge mod for Minecraft 1.21.1 and Create. It adds train-style sliding doors with dedicated models, animations, and positional sounds.
 
-| 车门 | 现实原型 | 动画特点 |
-|------|---------|---------|
-| **CR400BF Train Door** | 复兴号 CR400BF | Lerped 平滑滑动（120 ticks），带深度弹出效果 |
-| **CRH2A Train Door** | 和谐号 CRH2A | 分阶段动画（130 ticks）：关门先快后慢+防夹停顿 |
+## 中文
 
-两种门均支持：
-- 右键手动开关
-- 红石信号控制
-- 双开门联动
-- Create 列车 / 动态结构上的自动开关门
+### 主要功能
 
----
+- 内置 CR400BF 与 CRH2A 两种列车门。
+- 支持右键开关、红石控制和双开门联动。
+- 支持 Create 列车及其他动态结构上的开关门交互。
+- 组装后仍会播放对应车门的开关门音效。
+- 支持通过 ZIP 包添加自定义纹理、动画、名称、音效与合成配方。
+- 自定义包会在载入前检查 ID、路径、文件大小和必要资源，错误包会被跳过。
 
-## 依赖
+### 内置车门
 
-- Minecraft 1.21.1
-- NeoForge 21.1+
-- [Create 6.0+](https://modrinth.com/mod/create) (NeoForge)
+| 车门 | 现实原型 | 动画 |
+|---|---|---|
+| CR400BF Train Door | 复兴号 CR400BF | 平滑插值滑动，并带有深度弹出效果 |
+| CRH2A Train Door | 和谐号 CRH2A | 分阶段开关动画，包含停顿和速度变化 |
 
----
+### 环境要求
 
-## 自定义车门系统
+| 组件 | 版本 |
+|---|---|
+| Minecraft | 1.21.1 |
+| Mod Loader | NeoForge 21.1.x |
+| Create | 6.0.x，NeoForge 版 |
+| Java | 21 |
 
-将自定义车门 ZIP 包放入游戏目录下的 `tarindoor/` 文件夹，mod 会在启动时自动读取并注册。
+### 安装
 
+1. 安装 Minecraft 1.21.1、NeoForge 和 Create。
+2. 将本模组 JAR 放入游戏实例的 `mods/` 文件夹。
+3. 启动游戏。
 
-### 快速使用
+> 客户端和服务端都需要安装本模组及其依赖。
 
-1. 启动游戏一次，自动创建 `tarindoor/` 文件夹
-2. 将 `.zip` 文件放入该文件夹
-3. 重启游戏
+## English
 
-> 自定义门会注册方块、物品和方块实体，因此新增、删除或修改 `door.json`
-> 后必须重启游戏；Minecraft 的 `/reload` 只能重载数据包，不能修改注册表。
+### Features
 
----
+- Includes CR400BF and CRH2A train doors.
+- Supports manual interaction, redstone control, and paired double doors.
+- Works on assembled Create trains and other moving contraptions.
+- Preserves the correct open and close sounds after assembly.
+- Loads custom textures, animations, names, sounds, and recipes from ZIP packs.
+- Validates custom pack IDs, paths, file sizes, and required resources before registration.
 
-### ZIP 文件格式
+### Built-in Doors
 
-```
+| Door | Real-world inspiration | Animation |
+|---|---|---|
+| CR400BF Train Door | CR400BF Fuxing EMU | Smooth lerped motion with an optional depth push |
+| CRH2A Train Door | CRH2A Hexie EMU | Phased motion with pauses and speed changes |
+
+### Requirements
+
+| Component | Version |
+|---|---|
+| Minecraft | 1.21.1 |
+| Mod Loader | NeoForge 21.1.x |
+| Create | 6.0.x for NeoForge |
+| Java | 21 |
+
+### Installation
+
+1. Install Minecraft 1.21.1, NeoForge, and Create.
+2. Place the mod JAR in the instance's `mods/` directory.
+3. Start the game.
+
+> The mod and its dependencies are required on both the client and the server.
+
+## 自定义门包 / Custom Door Packs
+
+首次启动后，模组会在游戏目录创建 `tarindoor/`。将自定义门 ZIP 直接放入该目录并重启游戏。
+
+On first launch, the mod creates a `tarindoor/` directory in the game folder. Put custom door ZIP files directly in that directory and restart the game.
+
+> 自定义门会注册方块、物品和方块实体，因此新增、删除或修改 `door.json` 后必须重启游戏。`/reload` 无法修改注册表。
+>
+> Custom doors register blocks, items, and block entities. A full game restart is required after adding, removing, or changing `door.json`; `/reload` cannot update registries.
+
+### ZIP 结构 / ZIP Layout
+
+```text
 my_train_door.zip
-├── door.json          # 必需 — 门定义文件 / required
-├── side.png           # 必需 — 侧面纹理 / side texture
-├── top.png            # 必需 — 顶部纹理 / top texture
-├── bottom.png         # 必需 — 底部纹理 / bottom texture
-├── door_open.ogg      # 可选 — 开门音效（若未指定 sound_event）
-└── door_close.ogg     # 可选 — 关门音效（若未指定 sound_event）
+├── door.json          # 必需 / required
+├── side.png           # 必需 / required
+├── top.png            # 必需 / required
+├── bottom.png         # 必需 / required
+├── door_open.ogg      # 可选 / optional
+└── door_close.ogg     # 可选 / optional
 ```
 
----
+所有文件应直接位于 ZIP 根目录。建议使用单声道 OGG，以获得正确的 3D 距离衰减效果。
 
-### door.json 完整 Schema
+All files should be placed at the ZIP root. Mono OGG files are recommended for correct positional attenuation.
 
-```jsonc
+### `door.json` 示例 / Example
+
+```json
 {
-  // --- 必填 / Required ---
-  "id": "my_door",                    // 唯一标识符，仅小写字母数字下划线
-                                       // Unique ID, lowercase alphanumeric + underscore
-
-  "name": {                           // 本地化名称 / Localized display name
-    "en_us": "My Train Door",
-    "zh_cn": "我的列车门"
+  "id": "my_door",
+  "name": {
+    "zh_cn": "我的列车门",
+    "en_us": "My Train Door"
   },
-
-  // --- 动画配置 / Animation ---
   "animation": {
-    // "lerped" — 平滑插值动画 / smooth interpolation
-    // "phased" — 分阶段关键帧动画 / keyframe-based phased animation
     "type": "lerped",
-
-    // type=lerped 时使用：chase 速度（1/120 ≈ 0.00833）
-    "speed": 0.00833,
-
-    // type=phased 时使用：总时长（tick 数，20 tick = 1 秒）
-    "total_ticks": 130,
-
-    // type=phased 时使用：阶段序列
-    // phase 类型："pause"（保持当前值）或 "animate"（线性过渡）
-    "opening": [                      // 开门阶段
-      {"type": "pause",   "duration": 72},
-      {"type": "animate", "duration": 58}
-    ],
-    "closing": [                      // 关门阶段
-      {"type": "animate", "duration": 90},
-      {"type": "pause",   "duration": 6},
-      {"type": "animate", "duration": 34}
-    ]
+    "speed": 0.00833
   },
-
-  // --- 渲染配置 / Rendering ---
   "render": {
-    // 滑动距离倍率 / slide distance multiplier（value² × slide_scale）
     "slide_scale": 0.8125,
-
-    // 深度弹出效果 / optional depth push effect
     "depth_push": {
-      "enabled": true,                 // 是否启用
-      "clamp_multiplier": 12.0,       // 钳制乘数
-      "scale": 0.1                    // 深度位移量（格）
+      "enabled": true,
+      "clamp_multiplier": 12.0,
+      "scale": 0.1
     }
   },
-
-  // --- 方块属性 / Block Properties ---
   "block": {
-    "hardness": 5.0,                  // 硬度（可选，默认 5.0）
-    "resistance": 6.0,                // 爆炸抗性（可选，默认 6.0）
-    "map_color": "metal",             // 地图颜色（可选，默认 metal）
-    "sound_type": "netherite_block",  // 方块音效类型（可选，默认 netherite_block）
-
-    // === 音效方式一：ZIP 内置音效文件 / Custom OGG files in ZIP ===
+    "hardness": 5.0,
+    "resistance": 6.0,
+    "map_color": "metal",
+    "sound_type": "netherite_block",
     "open_sound_file": "door_open.ogg",
-    "close_sound_file": "door_close.ogg",
-
-    // === 音效方式二：复用已有 SoundEvent / Reuse existing SoundEvent ===
-    // 优先级高于方式一 / Takes priority over file-based sounds
-    // "sound_event": {
-    //   "open": "custom_train_door:cr400bf_door_open",
-    //   "close": "custom_train_door:cr400bf_door_close"
-    // }
+    "close_sound_file": "door_close.ogg"
   },
-
-  // --- 合成配方 / Recipe（可选 / optional）---
   "recipe": {
     "pattern": ["II", "II", "II"],
-    "keys": {"I": "minecraft:iron_ingot"},
+    "keys": {
+      "I": "minecraft:iron_ingot"
+    },
     "count": 1
   }
 }
 ```
 
----
+### 动画类型 / Animation Types
 
-### 可用内置音效
+`lerped` 使用平滑追踪速度：
 
-| SoundEvent | 说明 |
-|-----------|------|
-| `custom_train_door:cr400bf_door_open` | CR400BF 开门 |
-| `custom_train_door:cr400bf_door_close` | CR400BF 关门 |
-| `custom_train_door:crh2a_door_open` | CRH2A 开门 |
-| `custom_train_door:crh2a_door_close` | CRH2A 关门 |
-
-### 可用 MapColor
-
-`none` `grass` `sand` `wool` `fire` `ice` `metal` `plant` `snow` `clay` `dirt` `stone` `water` `wood` `quartz` `gold` `diamond` `lapis` `emerald` `nether` `color_orange` `color_light_blue` `color_yellow` `color_pink` `color_gray` `color_light_gray` `color_cyan` `color_purple` `color_blue` `color_brown` `color_green` `color_red` `color_black` 等
-
-### 可用 SoundType
-
-`wood` `stone` `metal` `glass` `wool` `sand` `gravel` `netherite_block` `anvil` `slime_block` `copper` `deepslate` `amethyst` `bamboo` 等
-
----
-
-### 配置示例
-
-**最简 lerped 门（复用 CR400BF 音效）：**
+`lerped` uses a smooth chase speed:
 
 ```json
 {
-  "id": "simple_door",
-  "name": {"zh_cn": "简易车门"},
-  "animation": {"type": "lerped", "speed": 0.00833},
-  "render": {"slide_scale": 0.8125},
+  "animation": {
+    "type": "lerped",
+    "speed": 0.00833
+  }
+}
+```
+
+`phased` 使用由暂停和线性过渡组成的阶段序列：
+
+`phased` uses a sequence of pause and linear animation phases:
+
+```json
+{
+  "animation": {
+    "type": "phased",
+    "total_ticks": 130,
+    "opening": [
+      {"type": "pause", "duration": 72},
+      {"type": "animate", "duration": 58}
+    ],
+    "closing": [
+      {"type": "animate", "duration": 90},
+      {"type": "pause", "duration": 6},
+      {"type": "animate", "duration": 34}
+    ]
+  }
+}
+```
+
+### 复用已有音效 / Reusing Sound Events
+
+自定义 OGG 也可以替换为已有的 `SoundEvent`。如果事件不存在，模组会回退到原版铁门音效。
+
+Custom OGG files can be replaced with existing `SoundEvent` IDs. Missing events fall back to the vanilla iron door sounds.
+
+```json
+{
   "block": {
     "sound_event": {
       "open": "custom_train_door:cr400bf_door_open",
@@ -176,39 +195,38 @@ my_train_door.zip
 }
 ```
 
-**带深度弹出 + 分阶段动画 + 自定义音效：**
+内置事件 / Built-in events:
 
-```json
-{
-  "id": "fancy_door",
-  "name": {"en_us": "Fancy Door", "zh_cn": "精致车门"},
-  "animation": {
-    "type": "phased",
-    "total_ticks": 160,
-    "opening": [
-      {"type": "pause",   "duration": 60},
-      {"type": "animate", "duration": 100}
-    ],
-    "closing": [
-      {"type": "animate", "duration": 100},
-      {"type": "pause",   "duration": 10},
-      {"type": "animate", "duration": 50}
-    ]
-  },
-  "render": {
-    "slide_scale": 0.9,
-    "depth_push": {"enabled": true, "clamp_multiplier": 10.0, "scale": 0.15}
-  },
-  "block": {
-    "hardness": 7.0,
-    "resistance": 8.0,
-    "open_sound_file": "door_open.ogg",
-    "close_sound_file": "door_close.ogg"
-  },
-  "recipe": {
-    "pattern": ["GG", "GG", "GG"],
-    "keys": {"G": "minecraft:gold_ingot"},
-    "count": 1
-  }
-}
-```
+- `custom_train_door:cr400bf_door_open`
+- `custom_train_door:cr400bf_door_close`
+- `custom_train_door:crh2a_door_open`
+- `custom_train_door:crh2a_door_close`
+
+## 常见问题 / Troubleshooting
+
+### 显示紫黑色错误材质 / Purple-black missing texture
+
+确认 ZIP 根目录包含 `side.png`、`top.png` 和 `bottom.png`，文件名与 `door.json` 引用完全一致，并在修改后完整重启游戏。
+
+Make sure `side.png`, `top.png`, and `bottom.png` exist at the ZIP root, match the names referenced by `door.json`, and restart the game after making changes.
+
+### 声音没有距离衰减 / Sound has no positional attenuation
+
+将音效转换为单声道 OGG。立体声音频通常会被当作非定位音频播放。
+
+Convert the audio to mono OGG. Stereo audio is commonly treated as non-positional audio.
+
+### `/reload` 后没有出现新车门 / New doors do not appear after `/reload`
+
+这是预期行为。自定义门涉及注册表内容，必须重启游戏。
+
+This is expected. Custom doors add registry content and require a full restart.
+
+## License
+
+All Rights Reserved. See the repository metadata for the applicable version.
+
+## Links
+
+- Source / 源码: <https://github.com/yasui-i/custom_train_door>
+- Issues / 问题反馈: <https://github.com/yasui-i/custom_train_door/issues>
