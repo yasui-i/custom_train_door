@@ -97,7 +97,7 @@ config="${mod_id}.mixins.json"
 [[dependencies.${mod_id}]]
     modId="create"
     type="required"
-    versionRange="[6.0.10,)"
+    versionRange="[6.0.10,6.1)"
     ordering="AFTER"
     side="BOTH"
 # AutoForge: end mod addon dependencies
