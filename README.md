@@ -43,8 +43,6 @@ A door pack can provide:
 - Localized display names
 - A custom crafting recipe
 
-> Custom doors register new blocks, items, and block entities. Restart the game after changing door packs; `/reload` cannot update registries.
-
 ## Requirements
 
 - Minecraft 1.21.1
@@ -123,8 +121,6 @@ Custom Train Door 为 Minecraft 1.21.1 的 Create 模组添加更接近真实列
 - 已注册的 Minecraft/模组 SoundEvent
 - 中英文等本地化名称
 - 自定义合成配方
-
-> 自定义门会注册新的方块、物品和方块实体，因此修改门包后必须重启游戏，不能使用 `/reload` 热重载。
 
 ## 环境要求
 
