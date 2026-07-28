@@ -121,33 +121,33 @@ The most common use case — keep the CR400BF door sound and animation behavior 
 
 ```json
 {
-    "id": "my_cr400bf_style_door",                          // 唯一标识符 [a-z0-9_]{1,48}，保留: cr400bf/crh2a
-    "name": {                                               // 本地化名称，键为语言代码
-        "en_us": "My CR400BF Style Door",                   // 至少提供 en_us 作为回退显示名
+    "id": "my_cr400bf_style_door",                          // Unique ID [a-z0-9_]{1,48}, reserved: cr400bf/crh2a
+    "name": {                                               // Localized names keyed by locale code
+        "en_us": "My CR400BF Style Door",                   // Provide at least en_us as fallback
         "zh_cn": "我的CR400BF风格门"
     },
     "animation": {
-        "type": "lerped",                                   // "lerped"(平滑插值, 默认) | "phased"(分阶段)
-        "speed": 0.00833                                    // 插值速度 0.000001~1.0, CR400BF 默认 1/120, 越小越慢
+        "type": "lerped",                                   // "lerped"(smooth, default) | "phased"(timeline-based)
+        "speed": 0.00833                                    // Lerp speed 0.000001~1.0, CR400BF default 1/120
     },
-    "render": {                                             // 控制滑动距离和深度推挤
-        "slide_scale": 0.8125,                              // 滑动比例 0.0~4.0, CR400BF = 13/16
-        "depth_push": {                                     // 深度推挤: 开门时面板沿开合方向微移
-            "enabled": true,                                // CR400BF 薄门板需要此效果
-            "clamp_multiplier": 12.0,                       // 钳制倍率 0.0~100.0
-            "scale": 0.1                                    // 推挤幅度 -4.0~4.0
+    "render": {                                             // Controls slide distance & depth push
+        "slide_scale": 0.8125,                              // Slide ratio 0.0~4.0, CR400BF = 13/16
+        "depth_push": {                                     // Depth push: panel shifts along open axis
+            "enabled": true,                                // CR400BF thin panel needs this
+            "clamp_multiplier": 12.0,                       // Clamp multiplier 0.0~100.0
+            "scale": 0.1                                    // Push scale -4.0~4.0
         }
     },
     "block": {
-        "sound_event": {                                    // 引用内置音效，无需打包 .ogg 文件
-            "open": "custom_train_door:cr400bf_door_open",  // 注意: sound_event 与 open_sound_file 二选一
-            "close": "custom_train_door:cr400bf_door_close" // sound_event 优先级更高
+        "sound_event": {                                    // Reuse built-in sounds, no .ogg needed
+            "open": "custom_train_door:cr400bf_door_open",  // sound_event vs open_sound_file: pick one
+            "close": "custom_train_door:cr400bf_door_close" // sound_event takes priority
         }
     },
-    "recipe": {                                             // 可选: 省略整个 recipe 则不添加合成配方
-        "pattern": ["II", "II", "II"],                      // 工作台 3×2 铁锭, 空格=" " = 空槽位
-        "keys": { "I": "minecraft:iron_ingot" },            // 符号→物品ID或标签映射
-        "count": 1                                          // 产出数量 1~64
+    "recipe": {                                             // Optional: omit entire recipe to skip crafting
+        "pattern": ["II", "II", "II"],                      // Crafting grid 3×2 iron, space=" " = empty
+        "keys": { "I": "minecraft:iron_ingot" },            // Symbol → item ID or tag
+        "count": 1                                          // Output count 1~64
     }
 }
 ```
@@ -158,36 +158,36 @@ Use the CRH2A phased animation timing and sounds with your own textures:
 
 ```json
 {
-    "id": "my_crh2a_style_door",                            // 唯一标识符 [a-z0-9_]{1,48}
+    "id": "my_crh2a_style_door",                            // Unique ID [a-z0-9_]{1,48}
     "name": {
         "en_us": "My CRH2A Style Door",
         "zh_cn": "我的CRH2A风格门"
     },
     "animation": {
-        "type": "phased",                                   // 分阶段动画, phase: "pause"(保持) | "animate"(过渡)
-        "total_ticks": 130,                                 // 动画总 tick, 1秒=20tick, CRH2A=130tick(6.5秒)
-        "opening": [                                        // 开门序列
-            { "type": "pause", "duration": 72 },            // 停顿 72 tick (3.6 秒)
-            { "type": "animate", "duration": 58 }           // 滑动 58 tick (2.9 秒)
+        "type": "phased",                                   // Phased animation, phase: "pause" | "animate"
+        "total_ticks": 130,                                 // Total ticks (1s=20t), CRH2A=130t(6.5s)
+        "opening": [                                        // Opening sequence
+            { "type": "pause", "duration": 72 },            // Pause 72 ticks (3.6s)
+            { "type": "animate", "duration": 58 }           // Slide 58 ticks (2.9s)
         ],
-        "closing": [                                        // 关门序列
-            { "type": "animate", "duration": 90 },          // 滑动 90 tick (4.5 秒)
-            { "type": "pause", "duration": 6 },             // 停顿 6 tick (0.3 秒)
-            { "type": "animate", "duration": 34 }           // 滑动 34 tick (1.7 秒)
+        "closing": [                                        // Closing sequence
+            { "type": "animate", "duration": 90 },          // Slide 90 ticks (4.5s)
+            { "type": "pause", "duration": 6 },             // Pause 6 ticks (0.3s)
+            { "type": "animate", "duration": 34 }           // Slide 34 ticks (1.7s)
         ]
     },
     "render": {
-        "slide_scale": 0.9                                  // 滑动比例 0.0~4.0, CRH2A=9/10, 比CR400BF更宽
-                                                            // CRH2A 不需要 depth_push, 省略即默认 enabled=false
+        "slide_scale": 0.9                                  // Slide ratio 0.0~4.0, CRH2A=9/10, wider than CR400BF
+                                                            // CRH2A doesn't need depth_push, omit = default disabled
     },
     "block": {
-        "sound_event": {                                    // 引用内置音效，无需打包 .ogg 文件
+        "sound_event": {                                    // Reuse built-in sounds, no .ogg needed
             "open": "custom_train_door:crh2a_door_open",
             "close": "custom_train_door:crh2a_door_close"
         }
     },
-    "recipe": {                                             // 可选合成配方
-        "pattern": ["II", "II", "II"],                      // 3×2 铁锭
+    "recipe": {                                             // Optional crafting recipe
+        "pattern": ["II", "II", "II"],                      // 3×2 iron ingots
         "keys": { "I": "minecraft:iron_ingot" },
         "count": 1
     }
@@ -202,41 +202,41 @@ If you prefer to bundle your own sound files instead of reusing built-in sounds:
 
 ```json
 {
-    "id": "my_train_door",                                  // 唯一标识符 [a-z0-9_]{1,48}
+    "id": "my_train_door",                                  // Unique ID [a-z0-9_]{1,48}
     "name": {
-        "en_us": "My Train Door",                           // 至少提供 en_us 作为回退显示名
+        "en_us": "My Train Door",                           // Provide at least en_us as fallback
         "zh_cn": "我的列车门"
     },
     "animation": {
-        "type": "lerped",                                   // 平滑线性插值
-        "speed": 0.01                                       // 插值速度 0.000001~1.0, 比CR400BF默认(1/120)略快
+        "type": "lerped",                                   // Smooth linear interpolation
+        "speed": 0.01                                       // Lerp speed 0.000001~1.0, faster than CR400BF default
     },
     "render": {
-        "slide_scale": 0.8125,                              // 13/16 滑动比例
-        "depth_push": {                                     // 深度推挤效果
+        "slide_scale": 0.8125,                              // 13/16 slide ratio
+        "depth_push": {                                     // Depth push effect
             "enabled": true,
             "clamp_multiplier": 12.0,
             "scale": 0.1
         }
     },
     "block": {
-        "hardness": 5.0,                                    // 硬度 0.0~10000.0, 默认 5.0
-        "resistance": 6.0,                                  // 爆炸抗性 0.0~10000.0, 默认 6.0
-        "map_color": "metal",                               // 地图色, 默认 "metal"
-        "sound_type": "metal",                              // 方块音效, 默认 "netherite_block"
-        "open_sound_file": "door_open.ogg",                 // ZIP 内自定义开门音效, 与 sound_event 二选一
-        "close_sound_file": "door_close.ogg"                // sound_event 优先级更高, 不要同时使用
+        "hardness": 5.0,                                    // Hardness 0.0~10000.0, default 5.0
+        "resistance": 6.0,                                  // Blast resistance 0.0~10000.0, default 6.0
+        "map_color": "metal",                               // Map color, default "metal"
+        "sound_type": "metal",                              // Step/break sound, default "netherite_block"
+        "open_sound_file": "door_open.ogg",                 // Custom OGG in ZIP, pick one: sound_event or file
+        "close_sound_file": "door_close.ogg"                // sound_event takes priority if both present
     },
     "recipe": {
-        "pattern": [                                        // 工作台 3×3 网格, 最多3行, 每行等宽1~3字符
-            "II",                                           // 空格 " " = 空槽位
+        "pattern": [                                        // Crafting grid, max 3 rows × 1~3 cols
+            "II",                                           // Space " " = empty slot
             "II",
             "II"
         ],
-        "keys": {                                           // 符号→物品ID(如 "minecraft:iron_ingot")或标签
+        "keys": {                                           // Symbol → item ID (e.g. "minecraft:iron_ingot") or tag
             "I": "minecraft:iron_ingot"
         },
-        "count": 1                                          // 产出数量 1~64, 默认 1
+        "count": 1                                          // Output count 1~64, default 1
     }
 }
 ```
@@ -247,12 +247,12 @@ If you prefer to bundle your own sound files instead of reusing built-in sounds:
 
 ```json
 {
-    "id": "simple_door"                                     // 唯一必填字段, 其余全部默认:
+    "id": "simple_door"                                     // Only required field, all defaults:
                                                             // animation: lerped, speed=1/120(≈0.00833)
-                                                            // render: CR400BF风格(slide_scale=13/16+depth_push)
+                                                            // render: CR400BF-style (slide_scale=13/16+depth_push)
                                                             // block: hardness=5.0, resistance=6.0,
                                                             //        map_color=metal, sound_type=netherite_block
-                                                            // recipe: 无合成配方
+                                                            // recipe: no crafting recipe
 }
 ```
 
