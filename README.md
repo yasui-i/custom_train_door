@@ -113,108 +113,146 @@ Valid `sound_type` values: `wood`, `gravel`, `grass`, `lily_pad`, `stone`, `meta
 | `keys` | object | **Yes** | Maps each symbol character to an ingredient (item tag or item ID). e.g. `{"I": "minecraft:iron_ingot"}`. |
 | `count` | integer | No | Number of doors crafted. Range `[1, 64]`. Default `1`. |
 
-#### Complete Example: Lerped Animation with Custom Sounds
+#### Practical Example: Reuse CR400BF Sounds & Style
+
+The most common use case — keep the CR400BF door sound and animation behavior while providing your own textures:
 
 ```json
 {
-    "id": "my_train_door",
+    "id": "my_cr400bf_style_door",                          // 唯一标识符 [a-z0-9_]{1,48}，保留: cr400bf/crh2a
+    "name": {                                               // 本地化名称，键为语言代码
+        "en_us": "My CR400BF Style Door",                   // 至少提供 en_us 作为回退显示名
+        "zh_cn": "我的CR400BF风格门"
+    },
+    "animation": {
+        "type": "lerped",                                   // "lerped"(平滑插值, 默认) | "phased"(分阶段)
+        "speed": 0.00833                                    // 插值速度 0.000001~1.0, CR400BF 默认 1/120, 越小越慢
+    },
+    "render": {                                             // 控制滑动距离和深度推挤
+        "slide_scale": 0.8125,                              // 滑动比例 0.0~4.0, CR400BF = 13/16
+        "depth_push": {                                     // 深度推挤: 开门时面板沿开合方向微移
+            "enabled": true,                                // CR400BF 薄门板需要此效果
+            "clamp_multiplier": 12.0,                       // 钳制倍率 0.0~100.0
+            "scale": 0.1                                    // 推挤幅度 -4.0~4.0
+        }
+    },
+    "block": {
+        "sound_event": {                                    // 引用内置音效，无需打包 .ogg 文件
+            "open": "custom_train_door:cr400bf_door_open",  // 注意: sound_event 与 open_sound_file 二选一
+            "close": "custom_train_door:cr400bf_door_close" // sound_event 优先级更高
+        }
+    },
+    "recipe": {                                             // 可选: 省略整个 recipe 则不添加合成配方
+        "pattern": ["II", "II", "II"],                      // 工作台 3×2 铁锭, 空格=" " = 空槽位
+        "keys": { "I": "minecraft:iron_ingot" },            // 符号→物品ID或标签映射
+        "count": 1                                          // 产出数量 1~64
+    }
+}
+```
+
+#### Practical Example: Reuse CRH2A Sounds & Animation
+
+Use the CRH2A phased animation timing and sounds with your own textures:
+
+```json
+{
+    "id": "my_crh2a_style_door",                            // 唯一标识符 [a-z0-9_]{1,48}
     "name": {
-        "en_us": "My Train Door",
+        "en_us": "My CRH2A Style Door",
+        "zh_cn": "我的CRH2A风格门"
+    },
+    "animation": {
+        "type": "phased",                                   // 分阶段动画, phase: "pause"(保持) | "animate"(过渡)
+        "total_ticks": 130,                                 // 动画总 tick, 1秒=20tick, CRH2A=130tick(6.5秒)
+        "opening": [                                        // 开门序列
+            { "type": "pause", "duration": 72 },            // 停顿 72 tick (3.6 秒)
+            { "type": "animate", "duration": 58 }           // 滑动 58 tick (2.9 秒)
+        ],
+        "closing": [                                        // 关门序列
+            { "type": "animate", "duration": 90 },          // 滑动 90 tick (4.5 秒)
+            { "type": "pause", "duration": 6 },             // 停顿 6 tick (0.3 秒)
+            { "type": "animate", "duration": 34 }           // 滑动 34 tick (1.7 秒)
+        ]
+    },
+    "render": {
+        "slide_scale": 0.9                                  // 滑动比例 0.0~4.0, CRH2A=9/10, 比CR400BF更宽
+                                                            // CRH2A 不需要 depth_push, 省略即默认 enabled=false
+    },
+    "block": {
+        "sound_event": {                                    // 引用内置音效，无需打包 .ogg 文件
+            "open": "custom_train_door:crh2a_door_open",
+            "close": "custom_train_door:crh2a_door_close"
+        }
+    },
+    "recipe": {                                             // 可选合成配方
+        "pattern": ["II", "II", "II"],                      // 3×2 铁锭
+        "keys": { "I": "minecraft:iron_ingot" },
+        "count": 1
+    }
+}
+```
+
+> **Tip**: The sound event IDs follow the pattern `custom_train_door:<door_id>_door_open` / `custom_train_door:<door_id>_door_close`. For the two built-in doors these are `custom_train_door:cr400bf_door_open`, `custom_train_door:cr400bf_door_close`, `custom_train_door:crh2a_door_open`, and `custom_train_door:crh2a_door_close`.
+
+#### Reference: Lerped Animation with Custom OGG Sounds
+
+If you prefer to bundle your own sound files instead of reusing built-in sounds:
+
+```json
+{
+    "id": "my_train_door",                                  // 唯一标识符 [a-z0-9_]{1,48}
+    "name": {
+        "en_us": "My Train Door",                           // 至少提供 en_us 作为回退显示名
         "zh_cn": "我的列车门"
     },
     "animation": {
-        "type": "lerped",
-        "speed": 0.01
+        "type": "lerped",                                   // 平滑线性插值
+        "speed": 0.01                                       // 插值速度 0.000001~1.0, 比CR400BF默认(1/120)略快
     },
     "render": {
-        "slide_scale": 0.8125,
-        "depth_push": {
+        "slide_scale": 0.8125,                              // 13/16 滑动比例
+        "depth_push": {                                     // 深度推挤效果
             "enabled": true,
             "clamp_multiplier": 12.0,
             "scale": 0.1
         }
     },
     "block": {
-        "hardness": 5.0,
-        "resistance": 6.0,
-        "map_color": "metal",
-        "sound_type": "metal",
-        "open_sound_file": "door_open.ogg",
-        "close_sound_file": "door_close.ogg"
+        "hardness": 5.0,                                    // 硬度 0.0~10000.0, 默认 5.0
+        "resistance": 6.0,                                  // 爆炸抗性 0.0~10000.0, 默认 6.0
+        "map_color": "metal",                               // 地图色, 默认 "metal"
+        "sound_type": "metal",                              // 方块音效, 默认 "netherite_block"
+        "open_sound_file": "door_open.ogg",                 // ZIP 内自定义开门音效, 与 sound_event 二选一
+        "close_sound_file": "door_close.ogg"                // sound_event 优先级更高, 不要同时使用
     },
     "recipe": {
-        "pattern": [
-            "II",
+        "pattern": [                                        // 工作台 3×3 网格, 最多3行, 每行等宽1~3字符
+            "II",                                           // 空格 " " = 空槽位
             "II",
             "II"
         ],
-        "keys": {
+        "keys": {                                           // 符号→物品ID(如 "minecraft:iron_ingot")或标签
             "I": "minecraft:iron_ingot"
         },
-        "count": 1
+        "count": 1                                          // 产出数量 1~64, 默认 1
     }
 }
 ```
 
-#### Example: Phased Animation (CRH2A-style) with Existing SoundEvents
+> **Note**: Most users should prefer the `sound_event` approach shown in the practical examples above — it's simpler and doesn't require bundling audio files. Use custom OGG files only when you need completely different sounds.
+
+#### Reference: Minimal door.json (all defaults)
 
 ```json
 {
-    "id": "phased_door",
-    "name": {
-        "en_us": "Phased Sliding Door"
-    },
-    "animation": {
-        "type": "phased",
-        "total_ticks": 130,
-        "opening": [
-            { "type": "pause", "duration": 72 },
-            { "type": "animate", "duration": 58 }
-        ],
-        "closing": [
-            { "type": "animate", "duration": 90 },
-            { "type": "pause", "duration": 6 },
-            { "type": "animate", "duration": 34 }
-        ]
-    },
-    "render": {
-        "slide_scale": 0.9
-    },
-    "block": {
-        "hardness": 5.0,
-        "resistance": 6.0,
-        "map_color": "color_light_blue",
-        "sound_type": "copper",
-        "sound_event": {
-            "open": "minecraft:block.iron_door.open",
-            "close": "minecraft:block.iron_door.close"
-        }
-    },
-    "recipe": {
-        "pattern": [
-            " C ",
-            "IDI",
-            " C "
-        ],
-        "keys": {
-            "C": "minecraft:copper_ingot",
-            "I": "minecraft:iron_ingot",
-            "D": "minecraft:iron_door"
-        },
-        "count": 2
-    }
+    "id": "simple_door"                                     // 唯一必填字段, 其余全部默认:
+                                                            // animation: lerped, speed=1/120(≈0.00833)
+                                                            // render: CR400BF风格(slide_scale=13/16+depth_push)
+                                                            // block: hardness=5.0, resistance=6.0,
+                                                            //        map_color=metal, sound_type=netherite_block
+                                                            // recipe: 无合成配方
 }
 ```
-
-#### Example: Minimal door.json (all defaults)
-
-```json
-{
-    "id": "simple_door"
-}
-```
-
-This creates a door with: lerped animation (speed 1/120), CR400BF-style rendering (slide 13/16 + depth push), netherite block sounds, metal map color, and no crafting recipe.
 
 #### ZIP File Layout
 
@@ -379,108 +417,146 @@ Custom Train Door 为 Minecraft 1.21.1 的 Create 模组添加更接近真实列
 | `keys` | object | **是** | 将每个符号字符映射到合成材料（物品标签或物品 ID）。如 `{"I": "minecraft:iron_ingot"}`。 |
 | `count` | integer | 否 | 合成产出数量。范围 `[1, 64]`。默认 `1`。 |
 
-#### 完整示例：线性插值动画 + 自定义音效
+#### 实用示例：套用 CR400BF 音效与风格
+
+最常见的用法 — 保留 CR400BF 的开关门音效和动画行为，仅替换自己的纹理：
 
 ```json
 {
-    "id": "my_train_door",
+    "id": "my_cr400bf_style_door",                          // 唯一标识符 [a-z0-9_]{1,48}，保留: cr400bf/crh2a
+    "name": {                                               // 本地化名称，键为语言代码
+        "en_us": "My CR400BF Style Door",                   // 至少提供 en_us 作为回退显示名
+        "zh_cn": "我的CR400BF风格门"
+    },
+    "animation": {
+        "type": "lerped",                                   // "lerped"(平滑插值, 默认) | "phased"(分阶段)
+        "speed": 0.00833                                    // 插值速度 0.000001~1.0, CR400BF 默认 1/120, 越小越慢
+    },
+    "render": {                                             // 控制滑动距离和深度推挤
+        "slide_scale": 0.8125,                              // 滑动比例 0.0~4.0, CR400BF = 13/16
+        "depth_push": {                                     // 深度推挤: 开门时面板沿开合方向微移
+            "enabled": true,                                // CR400BF 薄门板需要此效果
+            "clamp_multiplier": 12.0,                       // 钳制倍率 0.0~100.0
+            "scale": 0.1                                    // 推挤幅度 -4.0~4.0
+        }
+    },
+    "block": {
+        "sound_event": {                                    // 引用内置音效，无需打包 .ogg 文件
+            "open": "custom_train_door:cr400bf_door_open",  // 注意: sound_event 与 open_sound_file 二选一
+            "close": "custom_train_door:cr400bf_door_close" // sound_event 优先级更高
+        }
+    },
+    "recipe": {                                             // 可选: 省略整个 recipe 则不添加配方
+        "pattern": ["II", "II", "II"],                      // 工作台 3×2 铁锭, 空格=" " = 空槽位
+        "keys": { "I": "minecraft:iron_ingot" },            // 符号→物品ID或标签映射
+        "count": 1                                          // 产出数量 1~64
+    }
+}
+```
+
+#### 实用示例：套用 CRH2A 音效与分阶段动画
+
+使用 CRH2A 的分阶段动画节奏和音效，配合自己的纹理：
+
+```json
+{
+    "id": "my_crh2a_style_door",                            // 唯一标识符 [a-z0-9_]{1,48}
     "name": {
-        "en_us": "My Train Door",
+        "en_us": "My CRH2A Style Door",
+        "zh_cn": "我的CRH2A风格门"
+    },
+    "animation": {
+        "type": "phased",                                   // 分阶段动画, phase: "pause"(保持) | "animate"(过渡)
+        "total_ticks": 130,                                 // 动画总 tick, 1秒=20tick, CRH2A=130tick(6.5秒)
+        "opening": [                                        // 开门序列
+            { "type": "pause", "duration": 72 },            // 停顿 72 tick (3.6 秒)
+            { "type": "animate", "duration": 58 }           // 滑动 58 tick (2.9 秒)
+        ],
+        "closing": [                                        // 关门序列
+            { "type": "animate", "duration": 90 },          // 滑动 90 tick (4.5 秒)
+            { "type": "pause", "duration": 6 },             // 停顿 6 tick (0.3 秒)
+            { "type": "animate", "duration": 34 }           // 滑动 34 tick (1.7 秒)
+        ]
+    },
+    "render": {
+        "slide_scale": 0.9                                  // 滑动比例 0.0~4.0, CRH2A=9/10, 比CR400BF更宽
+                                                            // CRH2A 不需要 depth_push, 省略即默认 enabled=false
+    },
+    "block": {
+        "sound_event": {                                    // 引用内置音效，无需打包 .ogg 文件
+            "open": "custom_train_door:crh2a_door_open",
+            "close": "custom_train_door:crh2a_door_close"
+        }
+    },
+    "recipe": {                                             // 可选合成配方
+        "pattern": ["II", "II", "II"],                      // 3×2 铁锭
+        "keys": { "I": "minecraft:iron_ingot" },
+        "count": 1
+    }
+}
+```
+
+> **提示**：内置音效的资源路径遵循 `custom_train_door:<门id>_door_open` / `custom_train_door:<门id>_door_close` 的命名规则。两个内置门的音效 ID 分别为 `custom_train_door:cr400bf_door_open`、`custom_train_door:cr400bf_door_close`、`custom_train_door:crh2a_door_open`、`custom_train_door:crh2a_door_close`。
+
+#### 参考：线性插值动画 + 自定义 OGG 音效
+
+如果需要打包自己的音效文件而非复用内置音效：
+
+```json
+{
+    "id": "my_train_door",                                  // 唯一标识符 [a-z0-9_]{1,48}
+    "name": {
+        "en_us": "My Train Door",                           // 至少提供 en_us 作为回退显示名
         "zh_cn": "我的列车门"
     },
     "animation": {
-        "type": "lerped",
-        "speed": 0.01
+        "type": "lerped",                                   // 平滑线性插值
+        "speed": 0.01                                       // 插值速度 0.000001~1.0, 比CR400BF默认(1/120)略快
     },
     "render": {
-        "slide_scale": 0.8125,
-        "depth_push": {
+        "slide_scale": 0.8125,                              // 13/16 滑动比例
+        "depth_push": {                                     // 深度推挤效果
             "enabled": true,
             "clamp_multiplier": 12.0,
             "scale": 0.1
         }
     },
     "block": {
-        "hardness": 5.0,
-        "resistance": 6.0,
-        "map_color": "metal",
-        "sound_type": "metal",
-        "open_sound_file": "door_open.ogg",
-        "close_sound_file": "door_close.ogg"
+        "hardness": 5.0,                                    // 硬度 0.0~10000.0, 默认 5.0
+        "resistance": 6.0,                                  // 爆炸抗性 0.0~10000.0, 默认 6.0
+        "map_color": "metal",                               // 地图色, 默认 "metal"
+        "sound_type": "metal",                              // 方块音效, 默认 "netherite_block"
+        "open_sound_file": "door_open.ogg",                 // ZIP 内自定义开门音效, 与 sound_event 二选一
+        "close_sound_file": "door_close.ogg"                // sound_event 优先级更高, 不要同时使用
     },
     "recipe": {
-        "pattern": [
-            "II",
+        "pattern": [                                        // 工作台 3×3 网格, 最多3行, 每行等宽1~3字符
+            "II",                                           // 空格 " " = 空槽位
             "II",
             "II"
         ],
-        "keys": {
+        "keys": {                                           // 符号→物品ID(如 "minecraft:iron_ingot")或标签
             "I": "minecraft:iron_ingot"
         },
-        "count": 1
+        "count": 1                                          // 产出数量 1~64, 默认 1
     }
 }
 ```
 
-#### 示例：分阶段动画（CRH2A 风格）+ 已有 SoundEvent
+> **注意**：大多数情况下建议使用上方实用示例中的 `sound_event` 方式 — 更简单，无需打包音频文件。仅在需要完全不同音效时才使用自定义 OGG 文件。
+
+#### 参考：最简 door.json（全部使用默认值）
 
 ```json
 {
-    "id": "phased_door",
-    "name": {
-        "en_us": "Phased Sliding Door"
-    },
-    "animation": {
-        "type": "phased",
-        "total_ticks": 130,
-        "opening": [
-            { "type": "pause", "duration": 72 },
-            { "type": "animate", "duration": 58 }
-        ],
-        "closing": [
-            { "type": "animate", "duration": 90 },
-            { "type": "pause", "duration": 6 },
-            { "type": "animate", "duration": 34 }
-        ]
-    },
-    "render": {
-        "slide_scale": 0.9
-    },
-    "block": {
-        "hardness": 5.0,
-        "resistance": 6.0,
-        "map_color": "color_light_blue",
-        "sound_type": "copper",
-        "sound_event": {
-            "open": "minecraft:block.iron_door.open",
-            "close": "minecraft:block.iron_door.close"
-        }
-    },
-    "recipe": {
-        "pattern": [
-            " C ",
-            "IDI",
-            " C "
-        ],
-        "keys": {
-            "C": "minecraft:copper_ingot",
-            "I": "minecraft:iron_ingot",
-            "D": "minecraft:iron_door"
-        },
-        "count": 2
-    }
+    "id": "simple_door"                                     // 唯一必填字段, 其余全部默认:
+                                                            // animation: lerped, speed=1/120(≈0.00833)
+                                                            // render: CR400BF风格(slide_scale=13/16+depth_push)
+                                                            // block: hardness=5.0, resistance=6.0,
+                                                            //        map_color=metal, sound_type=netherite_block
+                                                            // recipe: 无合成配方
 }
 ```
-
-#### 示例：最简 door.json（全部使用默认值）
-
-```json
-{
-    "id": "simple_door"
-}
-```
-
-这将创建一个使用全部默认值的门：线性插值动画（速度 1/120）、CR400BF 风格渲染（滑动 13/16 + 深度推挤）、下界合金方块音效、金属地图色，无合成配方。
 
 #### ZIP 文件结构
 
