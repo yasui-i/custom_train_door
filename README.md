@@ -113,6 +113,8 @@ Valid `sound_type` values: `wood`, `gravel`, `grass`, `lily_pad`, `stone`, `meta
 | `keys` | object | **Yes** | Maps each symbol character to an ingredient (item tag or item ID). e.g. `{"I": "minecraft:iron_ingot"}`. |
 | `count` | integer | No | Number of doors crafted. Range `[1, 64]`. Default `1`. |
 
+> **Note**: The `//` comments in the examples below are for documentation only. **Remove all comments before using the JSON** — `door.json` does not support comments.
+
 #### Practical Example: Reuse CR400BF Sounds & Style
 
 The most common use case — keep the CR400BF door sound and animation behavior while providing your own textures:
@@ -416,6 +418,8 @@ Custom Train Door 为 Minecraft 1.21.1 的 Create 模组添加更接近真实列
 | `pattern` | string 数组 | **是** | 1–3 行合成配方，每行 1–3 个字符宽。所有行宽度必须一致。空格 ` ` = 空槽位。 |
 | `keys` | object | **是** | 将每个符号字符映射到合成材料（物品标签或物品 ID）。如 `{"I": "minecraft:iron_ingot"}`。 |
 | `count` | integer | 否 | 合成产出数量。范围 `[1, 64]`。默认 `1`。 |
+
+> **注意**：以下示例中的 `//` 注释仅供文档说明，**使用 JSON 前请先删除所有注释** — `door.json` 不支持注释。
 
 #### 实用示例：套用 CR400BF 音效与风格
 
