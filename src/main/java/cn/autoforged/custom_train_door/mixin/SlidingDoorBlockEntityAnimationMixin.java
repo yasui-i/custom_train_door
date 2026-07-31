@@ -24,7 +24,8 @@ public class SlidingDoorBlockEntityAnimationMixin {
         if ((Object) this instanceof TarindoorBlockEntity) {
             TarindoorBlockEntity tbe = (TarindoorBlockEntity) (Object) this;
             if (tbe.getBlockState().getBlock() instanceof TarindoorBlock block) {
-                return block.getDefinition().animation().lerpedSpeed();
+                var definition = block.getDefinition();
+                if (definition != null) return definition.animation().lerpedSpeed();
             }
         }
         if ((Object) this instanceof TarindoorPhasedBlockEntity) {

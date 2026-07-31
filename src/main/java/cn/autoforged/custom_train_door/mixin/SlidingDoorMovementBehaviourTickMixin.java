@@ -38,7 +38,8 @@ public class SlidingDoorMovementBehaviourTickMixin {
         MovementContext ctx = CURRENT_CONTEXT.get();
         if (ctx != null) {
             if (ctx.state.getBlock() instanceof TarindoorBlock tb) {
-                return tb.getDefinition().animation().lerpedSpeed();
+                var definition = tb.getDefinition();
+                if (definition != null) return definition.animation().lerpedSpeed();
             }
             if (ctx.state.getBlock() instanceof CRTrainDoorBlock) {
                 return 1.0 / 120.0;

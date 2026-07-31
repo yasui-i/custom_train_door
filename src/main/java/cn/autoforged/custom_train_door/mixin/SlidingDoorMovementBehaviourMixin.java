@@ -78,7 +78,9 @@ public abstract class SlidingDoorMovementBehaviourMixin {
                 boolean isTarindoor = context.state.getBlock() instanceof TarindoorBlock;
                 if (isTarindoor) {
                     TarindoorBlock tb = (TarindoorBlock) context.state.getBlock();
-                    String id = tb.getDefinition().id();
+                    var definition = tb.getDefinition();
+                    if (definition == null) return;
+                    String id = definition.id();
                     if (shouldOpen) {
                         var snd = TarindoorRegistry.getOpenSound(id);
                         if (snd != null) {

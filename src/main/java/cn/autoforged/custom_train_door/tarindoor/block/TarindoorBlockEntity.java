@@ -24,7 +24,7 @@ public class TarindoorBlockEntity extends SlidingDoorBlockEntity {
     private static BlockEntityType<? extends SlidingDoorBlockEntity> getTypeFor(BlockState state) {
         if (state.getBlock() instanceof TarindoorBlock block) {
             return (BlockEntityType<? extends SlidingDoorBlockEntity>)
-                    TarindoorRegistry.getBlockEntityType(block.getDefinition().id());
+                    TarindoorRegistry.getBlockEntityType(block.getSlot());
         }
         // fallback — should never happen
         return (BlockEntityType<? extends SlidingDoorBlockEntity>) (Object)

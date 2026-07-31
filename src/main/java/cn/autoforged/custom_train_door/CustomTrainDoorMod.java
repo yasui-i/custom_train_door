@@ -8,6 +8,7 @@ import cn.autoforged.custom_train_door.item.ModItems;
 import cn.autoforged.custom_train_door.sound.ModSounds;
 import cn.autoforged.custom_train_door.tarindoor.TarindoorRegistry;
 import cn.autoforged.custom_train_door.tarindoor.event.TarindoorPackEvents;
+import cn.autoforged.custom_train_door.tarindoor.network.TarindoorNetwork;
 import com.simibubi.create.api.behaviour.interaction.MovingInteractionBehaviour;
 import com.simibubi.create.api.behaviour.movement.MovementBehaviour;
 import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorMovementBehaviour;
@@ -46,6 +47,8 @@ public class CustomTrainDoorMod {
 
         modEventBus.addListener(this::onCommonSetup);
         modEventBus.addListener(TarindoorPackEvents::addPackFinders);
+        modEventBus.addListener(TarindoorNetwork::registerPayloads);
+        modEventBus.addListener(TarindoorNetwork::registerConfigurationTask);
     }
 
     private void onCommonSetup(FMLCommonSetupEvent event) {

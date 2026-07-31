@@ -8,6 +8,7 @@ import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorBlockEntity
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -24,21 +25,28 @@ import org.jetbrains.annotations.Nullable;
 
 public class TarindoorBlock extends SlidingDoorBlock {
 
-    private final TarindoorDefinition definition;
+    private final int slot;
 
-    public TarindoorBlock(Properties properties, BlockSetType type, TarindoorDefinition definition) {
+    public TarindoorBlock(Properties properties, BlockSetType type, int slot) {
         super(properties, type, false);
-        this.definition = definition;
+        this.slot = slot;
     }
 
+    @Nullable
     public TarindoorDefinition getDefinition() {
-        return definition;
+        return TarindoorRegistry.getDefinition(slot);
+    }
+
+    public int getSlot() {
+        return slot;
     }
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         if (state.getValue(HALF) == DoubleBlockHalf.UPPER) return null;
-        if (definition.animation().type() == TarindoorDefinition.AnimationType.PHASED) {
+        TarindoorDefinition definition = getDefinition();
+        if (definition != null
+                && definition.animation().type() == TarindoorDefinition.AnimationType.PHASED) {
             return new TarindoorPhasedBlockEntity(pos, state);
         }
         return new TarindoorBlockEntity(pos, state);
@@ -52,7 +60,7 @@ public class TarindoorBlock extends SlidingDoorBlock {
 
     @Override
     public BlockEntityType<? extends SlidingDoorBlockEntity> getBlockEntityType() {
-        return (BlockEntityType<? extends SlidingDoorBlockEntity>) TarindoorRegistry.getBlockEntityType(definition.id());
+        return (BlockEntityType<? extends SlidingDoorBlockEntity>) TarindoorRegistry.getBlockEntityType(slot);
     }
 
     @Override
@@ -72,7 +80,7 @@ public class TarindoorBlock extends SlidingDoorBlock {
                     this.setOpen(entity, level, otherDoor, otherPos, open);
                 }
                 level.playSound(entity, pos,
-                        open ? this.type().doorOpen() : this.type().doorClose(),
+                        getDoorSound(open),
                         SoundSource.BLOCKS, 1.0F, level.getRandom().nextFloat() * 0.1F + 0.9F);
                 level.gameEvent(entity, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, pos);
             }
@@ -93,7 +101,7 @@ public class TarindoorBlock extends SlidingDoorBlock {
                     }
                     if (isPowered != pState.getValue(OPEN)) {
                         pLevel.playSound(null, pPos,
-                                isPowered ? this.type().doorOpen() : this.type().doorClose(),
+                                getDoorSound(isPowered),
                                 SoundSource.BLOCKS, 1.0F, pLevel.getRandom().nextFloat() * 0.1F + 0.9F);
                         pLevel.gameEvent(null, isPowered ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, pPos);
                         DoorHingeSide hinge = changedState.getValue(HINGE);
@@ -131,10 +139,21 @@ public class TarindoorBlock extends SlidingDoorBlock {
             this.useWithoutItem(otherDoor, level, otherPos, player, hitResult);
         } else if (isOpen) {
             level.playSound(player, pos,
-                    this.type().doorOpen(),
+                    getDoorSound(true),
                     SoundSource.BLOCKS, 1.0F, level.getRandom().nextFloat() * 0.1F + 0.9F);
             level.gameEvent(player, GameEvent.BLOCK_OPEN, pos);
         }
         return net.minecraft.world.InteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    private SoundEvent getDoorSound(boolean open) {
+        TarindoorDefinition definition = getDefinition();
+        if (definition != null) {
+            var sound = open
+                    ? TarindoorRegistry.getOpenSound(definition.id())
+                    : TarindoorRegistry.getCloseSound(definition.id());
+            if (sound != null && sound.get() != null) return sound.get();
+        }
+        return open ? this.type().doorOpen() : this.type().doorClose();
     }
 }
