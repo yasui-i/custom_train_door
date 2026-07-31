@@ -40,11 +40,13 @@ public class TarindoorResourcePack implements PackResources {
     @Override
     @Nullable
     public IoSupplier<InputStream> getResource(PackType packType, ResourceLocation location) {
-        if (!NAMESPACE.equals(location.getNamespace())) return null;
+        if (!getNamespaces(packType).contains(location.getNamespace())) return null;
 
         String path = location.getPath();
-        String cacheKey = packType.name() + ":" + path;
-        byte[] data = cache.computeIfAbsent(cacheKey, ignored -> loadResource(packType, path));
+        String namespace = location.getNamespace();
+        String cacheKey = packType.name() + ":" + namespace + ":" + path;
+        byte[] data = cache.computeIfAbsent(cacheKey,
+                ignored -> loadResource(packType, namespace, path));
         if (data != null) {
             byte[] d = data;
             return () -> new ByteArrayInputStream(d);
@@ -54,49 +56,52 @@ public class TarindoorResourcePack implements PackResources {
 
     @Override
     public void listResources(PackType packType, String namespace, String prefix, ResourceOutput output) {
-        if (!NAMESPACE.equals(namespace)) return;
-
         if (packType == PackType.SERVER_DATA) {
+            if ("minecraft".equals(namespace)) {
+                accept(namespace, prefix, output, "tags/block/doors.json", getDoorTagJson());
+                return;
+            }
+            if (!NAMESPACE.equals(namespace)) return;
             for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
                 if (def.recipe() != null) {
-                    accept(prefix, output, "recipe/" + def.id() + "_door.json", getRecipeJson(def));
+                    accept(namespace, prefix, output,
+                            "recipe/" + def.id() + "_door.json", getRecipeJson(def));
                 }
             }
             return;
         }
+        if (!NAMESPACE.equals(namespace)) return;
 
         // Only publish resources for ZIP-defined doors. Built-in doors are supplied
         // by src/main/resources and must not be shadowed by this higher-priority pack.
-        Set<String> allIds = new LinkedHashSet<>();
-        for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
-            allIds.add(def.id());
-        }
-
-        for (String id : allIds) {
-            String doorName = id + "_door";
+        for (int slot = 0; slot < TarindoorRegistry.MAX_SLOTS; slot++) {
+            TarindoorDefinition def = TarindoorRegistry.getDefinition(slot);
+            String doorName = TarindoorRegistry.slotName(slot) + "_door";
 
             // Blockstate JSON
-            byte[] bsData = getBlockstateJson(id);
-            accept(prefix, output, "blockstates/" + doorName + ".json", bsData);
+            byte[] bsData = getBlockstateJson(doorName);
+            accept(namespace, prefix, output, "blockstates/" + doorName + ".json", bsData);
 
             // Block Models
-            byte[] bottomModel = getModelJson(id, "bottom");
-            accept(prefix, output, "models/block/" + doorName + "_bottom.json", bottomModel);
-            byte[] topModel = getModelJson(id, "top");
-            accept(prefix, output, "models/block/" + doorName + "_top.json", topModel);
+            byte[] bottomModel = def == null
+                    ? getFallbackModelJson() : getModelJson(doorName, "bottom");
+            accept(namespace, prefix, output, "models/block/" + doorName + "_bottom.json", bottomModel);
+            byte[] topModel = def == null
+                    ? getFallbackModelJson() : getModelJson(doorName, "top");
+            accept(namespace, prefix, output, "models/block/" + doorName + "_top.json", topModel);
 
             // Item Model (inventory icon)
-            byte[] itemModel = getItemModelJson(id);
-            accept(prefix, output, "models/item/" + doorName + ".json", itemModel);
+            byte[] itemModel = getItemModelJson(doorName);
+            accept(namespace, prefix, output, "models/item/" + doorName + ".json", itemModel);
 
-            TarindoorDefinition def = TarindoorRegistry.getDefinition(id);
             if (def == null) continue;
 
             // Dynamic doors: textures from zip
             for (String tex : new String[]{"side", "top", "bottom"}) {
                 byte[] texData = loadFromZip(def, tex + ".png");
                 if (texData != null) {
-                    accept(prefix, output, "textures/block/" + id + "_" + tex + ".png", texData);
+                    accept(namespace, prefix, output,
+                            "textures/block/" + doorName + "_" + tex + ".png", texData);
                 }
             }
 
@@ -104,32 +109,35 @@ public class TarindoorResourcePack implements PackResources {
             if (def.block().soundEventOpen() == null && def.block().openSoundFileName() != null) {
                 byte[] sndData = loadFromZip(def, def.block().openSoundFileName());
                 if (sndData != null) {
-                    accept(prefix, output, "sounds/" + id + "_door_open.ogg", sndData);
+                    accept(namespace, prefix, output, "sounds/" + doorName + "_open.ogg", sndData);
                 }
             }
             if (def.block().soundEventClose() == null && def.block().closeSoundFileName() != null) {
                 byte[] sndData = loadFromZip(def, def.block().closeSoundFileName());
                 if (sndData != null) {
-                    accept(prefix, output, "sounds/" + id + "_door_close.ogg", sndData);
+                    accept(namespace, prefix, output, "sounds/" + doorName + "_close.ogg", sndData);
                 }
             }
         }
 
-        accept(prefix, output, "sounds.json", getDynamicSoundsJson());
+        accept(namespace, prefix, output, "sounds.json", getDynamicSoundsJson());
         for (String locale : getLocales()) {
-            accept(prefix, output, "lang/" + locale + ".json", getLanguageJson(locale));
+            accept(namespace, prefix, output, "lang/" + locale + ".json", getLanguageJson(locale));
         }
     }
 
-    private static void accept(String prefix, ResourceOutput output, String path, byte[] data) {
+    private static void accept(String namespace, String prefix, ResourceOutput output,
+                               String path, byte[] data) {
         if (!path.startsWith(prefix)) return;
         output.accept(
-                ResourceLocation.fromNamespaceAndPath(NAMESPACE, path),
+                ResourceLocation.fromNamespaceAndPath(namespace, path),
                 () -> new ByteArrayInputStream(data));
     }
 
     @Override
-    public Set<String> getNamespaces(PackType type) { return Set.of(NAMESPACE); }
+    public Set<String> getNamespaces(PackType type) {
+        return type == PackType.SERVER_DATA ? Set.of(NAMESPACE, "minecraft") : Set.of(NAMESPACE);
+    }
 
     @Override
     public PackLocationInfo location() {
@@ -160,8 +168,12 @@ public class TarindoorResourcePack implements PackResources {
     // --- Resource loading ---
 
     @Nullable
-    private byte[] loadResource(PackType packType, String path) {
+    private byte[] loadResource(PackType packType, String namespace, String path) {
         if (packType == PackType.SERVER_DATA) {
+            if ("minecraft".equals(namespace) && "tags/block/doors.json".equals(path)) {
+                return getDoorTagJson();
+            }
+            if (!NAMESPACE.equals(namespace)) return null;
             if (path.startsWith("recipe/") && path.endsWith("_door.json")) {
                 String id = path.substring("recipe/".length(), path.length() - "_door.json".length());
                 TarindoorDefinition def = TarindoorRegistry.getDefinition(id);
@@ -169,6 +181,7 @@ public class TarindoorResourcePack implements PackResources {
             }
             return null;
         }
+        if (!NAMESPACE.equals(namespace)) return null;
         if ("sounds.json".equals(path)) return getDynamicSoundsJson();
         if (path.startsWith("lang/") && path.endsWith(".json")) {
             String locale = path.substring("lang/".length(), path.length() - ".json".length());
@@ -180,7 +193,7 @@ public class TarindoorResourcePack implements PackResources {
             String name = path.substring("models/item/".length(), path.length() - ".json".length());
             if (name.endsWith("_door")) {
                 id = name.substring(0, name.length() - "_door".length());
-                if (isKnownDoor(id)) return getItemModelJson(id);
+                if (isKnownSlot(id)) return getItemModelJson(name);
             }
         }
         // blockstates/{id}_door.json
@@ -188,7 +201,7 @@ public class TarindoorResourcePack implements PackResources {
             String name = path.substring("blockstates/".length(), path.length() - ".json".length());
             if (name.endsWith("_door")) {
                 id = name.substring(0, name.length() - "_door".length());
-                if (isKnownDoor(id)) return getBlockstateJson(id);
+                if (isKnownSlot(id)) return getBlockstateJson(name);
             }
         }
         // models/block/{id}_door_{bottom|top}.json
@@ -199,7 +212,12 @@ public class TarindoorResourcePack implements PackResources {
                     String doorPart = name.substring(0, name.length() - suffix.length());
                     if (doorPart.endsWith("_door")) {
                         id = doorPart.substring(0, doorPart.length() - "_door".length());
-                        if (isKnownDoor(id)) return getModelJson(id, suffix.substring(1));
+                        if (isKnownSlot(id)) {
+                            int slot = parseSlot(id);
+                            return TarindoorRegistry.getDefinition(slot) == null
+                                    ? getFallbackModelJson()
+                                    : getModelJson(doorPart, suffix.substring(1));
+                        }
                     }
                 }
             }
@@ -209,9 +227,10 @@ public class TarindoorResourcePack implements PackResources {
             String texName = path.substring("textures/block/".length());
             if (texName.endsWith(".png")) texName = texName.substring(0, texName.length() - 4);
             for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
-                String prefix = def.id() + "_";
-                if (texName.startsWith(prefix)) {
-                    return loadFromZip(def, texName.substring(prefix.length()) + ".png");
+                int slot = TarindoorRegistry.getSlot(def.id());
+                String resourcePrefix = TarindoorRegistry.slotName(slot) + "_door_";
+                if (texName.startsWith(resourcePrefix)) {
+                    return loadFromZip(def, texName.substring(resourcePrefix.length()) + ".png");
                 }
             }
         }
@@ -220,25 +239,38 @@ public class TarindoorResourcePack implements PackResources {
             String sndName = path.substring("sounds/".length());
             if (sndName.endsWith(".ogg")) sndName = sndName.substring(0, sndName.length() - 4);
             for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
-                if (sndName.equals(def.id() + "_door_open") && def.block().openSoundFileName() != null)
+                String doorName = TarindoorRegistry.slotName(TarindoorRegistry.getSlot(def.id())) + "_door";
+                if (sndName.equals(doorName + "_open") && def.block().openSoundFileName() != null)
                     return loadFromZip(def, def.block().openSoundFileName());
-                if (sndName.equals(def.id() + "_door_close") && def.block().closeSoundFileName() != null)
+                if (sndName.equals(doorName + "_close") && def.block().closeSoundFileName() != null)
                     return loadFromZip(def, def.block().closeSoundFileName());
             }
         }
         return null;
     }
 
-    private boolean isKnownDoor(String id) {
-        return TarindoorRegistry.getDefinition(id) != null;
+    private boolean isKnownSlot(String slotName) {
+        return parseSlot(slotName) >= 0;
+    }
+
+    private int parseSlot(String slotName) {
+        if (!slotName.startsWith("tarindoor_") || slotName.length() != "tarindoor_00".length()) {
+            return -1;
+        }
+        try {
+            int slot = Integer.parseInt(slotName.substring("tarindoor_".length()));
+            return slot >= 0 && slot < TarindoorRegistry.MAX_SLOTS ? slot : -1;
+        } catch (NumberFormatException ignored) {
+            return -1;
+        }
     }
 
     // --- JSON generators ---
 
-    private static byte[] getBlockstateJson(String id) {
+    private static byte[] getBlockstateJson(String doorName) {
         JsonObject root = new JsonObject();
         JsonObject variants = new JsonObject();
-        String modelNs = NAMESPACE + ":block/" + id + "_door";
+        String modelNs = NAMESPACE + ":block/" + doorName;
 
         for (String dir : new String[]{"east", "south", "west", "north"}) {
             for (String hinge : new String[]{"left", "right"}) {
@@ -269,14 +301,14 @@ public class TarindoorResourcePack implements PackResources {
         return toBytes(root);
     }
 
-    private static byte[] getModelJson(String id, String half) {
+    private static byte[] getModelJson(String doorName, String half) {
         JsonObject root = new JsonObject();
         root.addProperty("parent", "minecraft:block/block");
         root.addProperty("render_type", "minecraft:cutout_mipped");
         JsonObject textures = new JsonObject();
-        textures.addProperty("0", NAMESPACE + ":block/" + id + "_side");
-        textures.addProperty("2", NAMESPACE + ":block/" + id + "_" + half);
-        textures.addProperty("particle", NAMESPACE + ":block/" + id + "_" + half);
+        textures.addProperty("0", NAMESPACE + ":block/" + doorName + "_side");
+        textures.addProperty("2", NAMESPACE + ":block/" + doorName + "_" + half);
+        textures.addProperty("particle", NAMESPACE + ":block/" + doorName + "_" + half);
         root.add("textures", textures);
 
         JsonArray elements = new JsonArray();
@@ -319,31 +351,37 @@ public class TarindoorResourcePack implements PackResources {
         return toBytes(root);
     }
 
-    private static byte[] getItemModelJson(String id) {
+    private static byte[] getItemModelJson(String doorName) {
         JsonObject root = new JsonObject();
-        root.addProperty("parent", NAMESPACE + ":block/" + id + "_door_bottom");
+        root.addProperty("parent", NAMESPACE + ":block/" + doorName + "_bottom");
         return toBytes(root);
     }
 
     private static byte[] getDynamicSoundsJson() {
         JsonObject root = new JsonObject();
-        for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
-            String id = def.id();
-            String sk = "subtitles." + NAMESPACE + "." + id + "_door";
-            if (def.block().soundEventOpen() == null && def.block().openSoundFileName() != null) {
-                JsonObject e = new JsonObject();
-                e.addProperty("subtitle", sk + "_open");
-                JsonArray a = new JsonArray(); a.add(NAMESPACE + ":" + id + "_door_open");
-                e.add("sounds", a); root.add(id + "_door_open", e);
-            }
-            if (def.block().soundEventClose() == null && def.block().closeSoundFileName() != null) {
-                JsonObject e = new JsonObject();
-                e.addProperty("subtitle", sk + "_close");
-                JsonArray a = new JsonArray(); a.add(NAMESPACE + ":" + id + "_door_close");
-                e.add("sounds", a); root.add(id + "_door_close", e);
-            }
+        for (int slot = 0; slot < TarindoorRegistry.MAX_SLOTS; slot++) {
+            TarindoorDefinition def = TarindoorRegistry.getDefinition(slot);
+            String doorName = TarindoorRegistry.slotName(slot) + "_door";
+            addSoundDefinition(root, doorName + "_open", def, true);
+            addSoundDefinition(root, doorName + "_close", def, false);
         }
         return toBytes(root);
+    }
+
+    private static void addSoundDefinition(JsonObject root, String eventName,
+                                           @Nullable TarindoorDefinition def, boolean open) {
+        JsonObject event = new JsonObject();
+        JsonArray sounds = new JsonArray();
+        if (def != null) {
+            String soundEvent = open ? def.block().soundEventOpen() : def.block().soundEventClose();
+            String soundFile = open ? def.block().openSoundFileName() : def.block().closeSoundFileName();
+            if (soundEvent == null && soundFile != null) {
+                event.addProperty("subtitle", "subtitles." + NAMESPACE + "." + eventName);
+                sounds.add(NAMESPACE + ":" + eventName);
+            }
+        }
+        event.add("sounds", sounds);
+        root.add(eventName, event);
     }
 
     private static Set<String> getLocales() {
@@ -358,12 +396,13 @@ public class TarindoorResourcePack implements PackResources {
     private static byte[] getLanguageJson(String locale) {
         JsonObject root = new JsonObject();
         for (TarindoorDefinition def : TarindoorRegistry.getDefinitions()) {
+            String doorName = TarindoorRegistry.slotName(TarindoorRegistry.getSlot(def.id())) + "_door";
             String name = def.localizedNames().get(locale);
             if (name == null && "en_us".equals(locale)) name = def.displayName();
             if (name != null) {
-                root.addProperty("block." + NAMESPACE + "." + def.id() + "_door", name);
+                root.addProperty("block." + NAMESPACE + "." + doorName, name);
             }
-            String subtitle = "subtitles." + NAMESPACE + "." + def.id() + "_door";
+            String subtitle = "subtitles." + NAMESPACE + "." + doorName;
             if (def.block().soundEventOpen() == null && def.block().openSoundFileName() != null) {
                 root.addProperty(subtitle + "_open", "Train door opens");
             }
@@ -390,9 +429,27 @@ public class TarindoorResourcePack implements PackResources {
         });
         root.add("key", key);
         JsonObject result = new JsonObject();
-        result.addProperty("id", NAMESPACE + ":" + def.id() + "_door");
+        int slot = TarindoorRegistry.getSlot(def.id());
+        result.addProperty("id", NAMESPACE + ":" + TarindoorRegistry.slotName(slot) + "_door");
         result.addProperty("count", recipe.count());
         root.add("result", result);
+        return toBytes(root);
+    }
+
+    private static byte[] getFallbackModelJson() {
+        JsonObject root = new JsonObject();
+        root.addProperty("parent", "minecraft:block/iron_block");
+        return toBytes(root);
+    }
+
+    private static byte[] getDoorTagJson() {
+        JsonObject root = new JsonObject();
+        root.addProperty("replace", false);
+        JsonArray values = new JsonArray();
+        for (int slot = 0; slot < TarindoorRegistry.MAX_SLOTS; slot++) {
+            values.add(NAMESPACE + ":" + TarindoorRegistry.slotName(slot) + "_door");
+        }
+        root.add("values", values);
         return toBytes(root);
     }
 

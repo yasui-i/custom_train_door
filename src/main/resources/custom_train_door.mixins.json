@@ -4,6 +4,10 @@
     "package": "cn.autoforged.custom_train_door.mixin",
     "compatibilityLevel": "JAVA_21",
     "mixins": [
+        "BlockEntityLegacyIdMixin",
+        "ChunkSerializerLegacyIdMixin",
+        "ItemStackLegacyIdMixin",
+        "NbtUtilsLegacyIdMixin",
         "SlidingDoorBlockEntityAccessor",
         "SlidingDoorBlockEntityAnimationMixin",
         "SlidingDoorMovementBehaviourMixin",

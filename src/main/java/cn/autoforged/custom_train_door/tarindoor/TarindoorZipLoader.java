@@ -40,14 +40,22 @@ public class TarindoorZipLoader {
      * Also stores zip path mappings in TarindoorRegistry.
      */
     public static List<TarindoorDefinition> loadDefinitions() {
-        Path dir = getTarindoorDir();
+        return loadDefinitions(getTarindoorDir(), true);
+    }
+
+    /**
+     * Load definitions from an explicit directory. Server-synchronized client
+     * caches use {@code createUserFiles=false} so they never receive README or
+     * other local configuration files.
+     */
+    public static List<TarindoorDefinition> loadDefinitions(Path dir, boolean createUserFiles) {
         List<TarindoorDefinition> result = new ArrayList<>();
         Set<String> seenIds = new HashSet<>();
 
         try {
             if (!Files.exists(dir)) {
                 Files.createDirectories(dir);
-                createReadme(dir);
+                if (createUserFiles) createReadme(dir);
                 LOGGER.info("Created tarindoor folder at {}", dir);
                 return result;
             }

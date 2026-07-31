@@ -22,7 +22,7 @@ public class ModCreativeTab {
                     .displayItems((params, output) -> {
                         output.accept(ModBlocks.CR400BF_DOOR.get());
                         output.accept(ModBlocks.CRH2A_DOOR.get());
-                        for (DeferredBlock<?> db : TarindoorRegistry.getOrderedBlocks()) {
+                        for (DeferredBlock<?> db : TarindoorRegistry.getActiveBlocks()) {
                             output.accept(db.get());
                         }
                     }).build());
