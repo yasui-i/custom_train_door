@@ -149,10 +149,13 @@ public class TarindoorBlock extends SlidingDoorBlock {
     private SoundEvent getDoorSound(boolean open) {
         TarindoorDefinition definition = getDefinition();
         if (definition != null) {
-            var sound = open
+            var supplier = open
                     ? TarindoorRegistry.getOpenSound(definition.id())
                     : TarindoorRegistry.getCloseSound(definition.id());
-            if (sound != null && sound.get() != null) return sound.get();
+            if (supplier != null) {
+                SoundEvent result = supplier.get();
+                if (result != null) return result;
+            }
         }
         return open ? this.type().doorOpen() : this.type().doorClose();
     }

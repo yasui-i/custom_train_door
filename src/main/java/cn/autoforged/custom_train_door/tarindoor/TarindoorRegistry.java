@@ -191,10 +191,20 @@ public final class TarindoorRegistry {
     public static void registerSounds(IEventBus bus) {
         for (int slot = 0; slot < MAX_SLOTS; slot++) {
             String name = slotName(slot);
+            TarindoorDefinition def = getDefinition(slot);
+            boolean useSharedOpen = def != null && def.block().soundEventOpen() != null;
+            boolean useSharedClose = def != null && def.block().soundEventClose() != null;
+
             OPEN_SOUNDS.add(SOUND_EVENTS.register(name + "_door_open",
-                    () -> SoundEvent.createVariableRangeEvent(id(name + "_door_open"))));
+                    () -> SoundEvent.createVariableRangeEvent(
+                            useSharedOpen
+                                    ? ResourceLocation.parse(def.block().soundEventOpen())
+                                    : id(name + "_door_open"))));
             CLOSE_SOUNDS.add(SOUND_EVENTS.register(name + "_door_close",
-                    () -> SoundEvent.createVariableRangeEvent(id(name + "_door_close"))));
+                    () -> SoundEvent.createVariableRangeEvent(
+                            useSharedClose
+                                    ? ResourceLocation.parse(def.block().soundEventClose())
+                                    : id(name + "_door_close"))));
         }
         SOUND_EVENTS.register(bus);
     }
