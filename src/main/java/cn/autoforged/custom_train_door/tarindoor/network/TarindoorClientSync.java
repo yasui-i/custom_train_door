@@ -2,19 +2,24 @@ package cn.autoforged.custom_train_door.tarindoor.network;
 
 import cn.autoforged.custom_train_door.CustomTrainDoorMod;
 import cn.autoforged.custom_train_door.tarindoor.TarindoorRegistry;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.bus.api.SubscribeEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -25,13 +30,19 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 @EventBusSubscriber(modid = CustomTrainDoorMod.MODID, value = Dist.CLIENT)
 public final class TarindoorClientSync {
     private static final Logger LOGGER = LoggerFactory.getLogger("custom_train_door/TarindoorSync");
     private static final Pattern SAFE_ID = Pattern.compile("[a-z0-9_]{1,48}");
+    private static final Gson GSON = new Gson();
+    private static final Path CACHE_ROOT = FMLPaths.GAMEDIR.get().resolve("tarindoor")
+            .resolve("server-cache").toAbsolutePath().normalize();
     private static TransferState transfer;
+    private static boolean cacheHit;
     private static boolean usingServerPacks;
+    private static volatile boolean pendingReload;
     private static CompletableFuture<Void> resourceReloadTail =
             CompletableFuture.completedFuture(null);
 
@@ -54,6 +65,57 @@ public final class TarindoorClientSync {
             context.disconnect(Component.literal("Invalid custom train door chunk count"));
             return;
         }
+
+        // Check content-addressed cache before downloading
+        Path cacheDir = getCacheDir(payload.sha256());
+        if (Files.isDirectory(cacheDir) && Files.exists(cacheDir.resolve("slots.json"))) {
+            cacheHit = true;
+            transfer = null;
+            try {
+                Map<String, Integer> slots = readCacheSlots(cacheDir);
+                TarindoorRegistry.loadSynced(cacheDir, slots);
+                usingServerPacks = true;
+                pendingReload = true;
+                LOGGER.info("Using cached tarindoor bundle {} ({} doors, skipped {} chunks)",
+                        payload.sha256(), slots.size(), payload.chunkCount());
+                if (context.connection().isConnected()) {
+                    context.reply(new TarindoorSyncAckPayload(payload.syncId()));
+                }
+            } catch (Exception e) {
+                LOGGER.error("Failed to load cached tarindoor bundle, will download", e);
+                // Fall through to normal download
+                cacheHit = false;
+                transfer = new TransferState(payload.syncId(), payload.totalBytes(),
+                        payload.chunkCount(), payload.sha256());
+                if (payload.chunkCount() == 0) finishTransfer(context);
+            }
+            return;
+        }
+
+        // Check if local tarindoor packs produce the same hash as server
+        String localHash = computeLocalBundleHash();
+        if (localHash != null && localHash.equals(payload.sha256())) {
+            cacheHit = true;
+            transfer = null;
+            try {
+                // Save local packs into cache for future instant loads
+                saveLocalPacksToCache(cacheDir);
+                usingServerPacks = true;
+                pendingReload = true;
+                LOGGER.info("Local tarindoor packs match server hash {}; saved to cache, skipped download",
+                        payload.sha256());
+            } catch (Exception e) {
+                LOGGER.warn("Failed to save local packs to cache, using local directly", e);
+                usingServerPacks = true;
+                pendingReload = true;
+            }
+            if (context.connection().isConnected()) {
+                context.reply(new TarindoorSyncAckPayload(payload.syncId()));
+            }
+            return;
+        }
+
+        cacheHit = false;
         transfer = new TransferState(payload.syncId(), payload.totalBytes(),
                 payload.chunkCount(), payload.sha256());
         if (payload.chunkCount() == 0) finishTransfer(context);
@@ -62,7 +124,13 @@ public final class TarindoorClientSync {
     public static synchronized void handleChunk(
             TarindoorSyncChunkPayload payload, IPayloadContext context) {
         TransferState state = transfer;
-        if (state == null || !state.id.equals(payload.syncId())
+        if (state == null) {
+            // Cache hit or transfer already finished — silently discard remaining chunks
+            if (cacheHit) return;
+            context.disconnect(Component.literal("Invalid custom train door data chunk"));
+            return;
+        }
+        if (!state.id.equals(payload.syncId())
                 || payload.index() < 0 || payload.index() >= state.chunks.length
                 || state.chunks[payload.index()] != null) {
             context.disconnect(Component.literal("Invalid or duplicate custom train door data chunk"));
@@ -85,26 +153,19 @@ public final class TarindoorClientSync {
         if (state == null) return;
         try {
             byte[] bundle = joinAndVerify(state);
-            installBundle(bundle);
+            installBundle(bundle, state.digest);
             usingServerPacks = true;
-            LOGGER.info("Installed synchronized tarindoor bundle {}; reloading client resources", state.id);
-            context.enqueueWork(() -> queueResourceReload()
-                    .whenComplete((ignored, error) -> Minecraft.getInstance().execute(() -> {
-                        if (error != null) {
-                            LOGGER.error("Failed to reload synchronized tarindoor resources", error);
-                            if (context.connection().isConnected()) {
-                                context.disconnect(Component.literal(
-                                        "Could not load synchronized custom train door resources"));
-                            }
-                        } else if (context.connection().isConnected()) {
-                            LOGGER.info("Client resources reloaded; acknowledging tarindoor bundle {}", state.id);
-                            context.reply(new TarindoorSyncAckPayload(state.id));
-                        }
-                    })));
+            pendingReload = true;
+            LOGGER.info("Installed synchronized tarindoor bundle {} ({}); will reload resources after login",
+                    state.id, state.digest);
+            if (context.connection().isConnected()) {
+                context.reply(new TarindoorSyncAckPayload(state.id));
+            }
         } catch (IOException | NoSuchAlgorithmException | RuntimeException e) {
-            LOGGER.error("Rejected synchronized tarindoor bundle", e);
-            context.disconnect(Component.literal(
-                    "Invalid synchronized custom train door pack: " + e.getMessage()));
+            LOGGER.error("Rejected synchronized tarindoor bundle (client will use fallback)", e);
+            if (context.connection().isConnected()) {
+                context.reply(new TarindoorSyncAckPayload(state.id));
+            }
         }
     }
 
@@ -128,19 +189,13 @@ public final class TarindoorClientSync {
         return result;
     }
 
-    private static void installBundle(byte[] bundle) throws IOException {
-        Path cache = FMLPaths.GAMEDIR.get().resolve("tarindoor")
-                .resolve("server-cache").resolve("active").toAbsolutePath().normalize();
-        Path expectedRoot = FMLPaths.GAMEDIR.get().resolve("tarindoor")
-                .resolve("server-cache").toAbsolutePath().normalize();
-        if (!cache.startsWith(expectedRoot)) throw new IOException("Unsafe cache path");
-        Files.createDirectories(cache);
-        try (DirectoryStream<Path> oldPacks = Files.newDirectoryStream(cache, "*.zip")) {
-            for (Path oldPack : oldPacks) Files.deleteIfExists(oldPack);
-        }
-
+    private static void installBundle(byte[] bundle, String sha256) throws IOException {
+        Path cacheDir = getCacheDir(sha256);
+        if (!cacheDir.startsWith(CACHE_ROOT)) throw new IOException("Unsafe cache path");
+        Files.createDirectories(cacheDir);
         Map<String, Integer> slots = new LinkedHashMap<>();
-        try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bundle))) {
+
+try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bundle))) {
             if (input.readInt() != TarindoorNetwork.BUNDLE_MAGIC) {
                 throw new IOException("Unknown bundle format");
             }
@@ -151,6 +206,7 @@ public final class TarindoorClientSync {
             if (count < 0 || count > TarindoorRegistry.MAX_SLOTS) {
                 throw new IOException("Invalid door count");
             }
+            
             Set<Integer> usedSlots = new HashSet<>();
             for (int index = 0; index < count; index++) {
                 int slot = input.readInt();
@@ -163,8 +219,8 @@ public final class TarindoorClientSync {
                 }
                 byte[] zip = input.readNBytes(length);
                 if (zip.length != length) throw new IOException("Truncated door pack");
-                Path target = cache.resolve(String.format(Locale.ROOT, "slot_%02d.zip", slot));
-                Path temporary = cache.resolve(String.format(Locale.ROOT, "slot_%02d.zip.tmp", slot));
+                Path target = cacheDir.resolve(String.format(Locale.ROOT, "slot_%02d.zip", slot));
+                Path temporary = cacheDir.resolve(String.format(Locale.ROOT, "slot_%02d.zip.tmp", slot));
                 Files.write(temporary, zip);
                 try {
                     Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING,
@@ -172,21 +228,35 @@ public final class TarindoorClientSync {
                 } catch (IOException atomicMoveFailure) {
                     Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
                 }
+                // Also copy to tarindoor/ root so local loadAll() picks it up on next launch
+                Path localTarget = CACHE_ROOT.getParent().resolve(id + ".zip");
+                Path localTmp = CACHE_ROOT.getParent().resolve(id + ".zip.tmp");
+                try {
+                    Files.write(localTmp, zip);
+                    try {
+                        Files.move(localTmp, localTarget, StandardCopyOption.REPLACE_EXISTING,
+                                StandardCopyOption.ATOMIC_MOVE);
+                    } catch (IOException atomicMoveFailure) {
+                        Files.move(localTmp, localTarget, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } catch (IOException e) {
+                    LOGGER.warn("Failed to copy synced door pack '{}' to tarindoor folder", id, e);
+                }
             }
             if (input.available() != 0) throw new IOException("Trailing bundle data");
         }
 
-        TarindoorRegistry.loadSynced(cache, slots);
-        for (String id : slots.keySet()) {
-            if (TarindoorRegistry.getDefinition(id) == null) {
-                throw new IOException("Door pack '" + id + "' failed validation");
-            }
-        }
+        // Persist slot mapping so the cache can be loaded without re-parsing the bundle
+        writeCacheSlots(cacheDir, slots);
+        // Remove old cache directories to free disk space
+        clearOldCaches(sha256);
+        TarindoorRegistry.loadSynced(cacheDir, slots);
     }
 
     @SubscribeEvent
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         transfer = null;
+        pendingReload = false;
         if (!usingServerPacks) return;
         usingServerPacks = false;
         TarindoorRegistry.loadAll();
@@ -195,6 +265,20 @@ public final class TarindoorClientSync {
                 LOGGER.error("Failed to restore local tarindoor resources after disconnect", error);
             } else {
                 LOGGER.info("Restored local tarindoor resources after disconnect");
+            }
+        });
+    }
+
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        if (!pendingReload) return;
+        pendingReload = false;
+        LOGGER.info("Triggering deferred resource reload for synchronized tarindoor packs");
+        queueResourceReload().whenComplete((ignored, error) -> {
+            if (error != null) {
+                LOGGER.error("Failed to reload synchronized tarindoor resources (will retry on next manual reload)", error);
+            } else {
+                LOGGER.info("Synchronized tarindoor resources reloaded successfully");
             }
         });
     }
@@ -230,6 +314,102 @@ public final class TarindoorClientSync {
     private static synchronized void clearCompletedReload(CompletableFuture<Void> completed) {
         if (resourceReloadTail == completed) {
             resourceReloadTail = CompletableFuture.completedFuture(null);
+        }
+    }
+
+    // --- Content-addressed cache helpers ---
+
+    private static Path getCacheDir(String sha256) {
+        return CACHE_ROOT.resolve(sha256);
+    }
+
+    @org.jetbrains.annotations.Nullable
+    private static String computeLocalBundleHash() {
+        try {
+            Collection<cn.autoforged.custom_train_door.tarindoor.TarindoorDefinition> definitions =
+                    TarindoorRegistry.getDefinitions();
+            if (definitions.isEmpty()) return null;
+
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (DataOutputStream output = new DataOutputStream(bytes)) {
+                output.writeInt(TarindoorNetwork.BUNDLE_MAGIC);
+                output.writeInt(TarindoorNetwork.BUNDLE_VERSION);
+                List<cn.autoforged.custom_train_door.tarindoor.TarindoorDefinition> sorted =
+                        definitions.stream()
+                                .sorted(Comparator.comparing(
+                                        cn.autoforged.custom_train_door.tarindoor.TarindoorDefinition::id))
+                                .toList();
+                output.writeInt(sorted.size());
+                for (var def : sorted) {
+                    int slot = TarindoorRegistry.getSlot(def.id());
+                    Path zipPath = TarindoorRegistry.getZipPath(def);
+                    if (slot < 0 || zipPath == null || !Files.isRegularFile(zipPath)) {
+                        return null;
+                    }
+                    long size = Files.size(zipPath);
+                    if (size > TarindoorNetwork.MAX_PACK_BYTES) return null;
+                    byte[] zip = Files.readAllBytes(zipPath);
+                    output.writeInt(slot);
+                    output.writeUTF(def.id());
+                    output.writeInt(zip.length);
+                    output.write(zip);
+                    if (bytes.size() > TarindoorNetwork.MAX_TOTAL_BYTES) return null;
+                }
+            }
+            byte[] bundle = bytes.toByteArray();
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bundle));
+        } catch (Exception e) {
+            LOGGER.warn("Failed to compute local bundle hash, will download", e);
+            return null;
+        }
+    }
+
+    private static void saveLocalPacksToCache(Path cacheDir) throws IOException {
+        Files.createDirectories(cacheDir);
+        Map<String, Integer> slots = new LinkedHashMap<>();
+        for (var def : TarindoorRegistry.getDefinitions()) {
+            int slot = TarindoorRegistry.getSlot(def.id());
+            Path zipPath = TarindoorRegistry.getZipPath(def);
+            if (slot < 0 || zipPath == null || !Files.isRegularFile(zipPath)) continue;
+            Path target = cacheDir.resolve(String.format(Locale.ROOT, "slot_%02d.zip", slot));
+            Files.copy(zipPath, target, StandardCopyOption.REPLACE_EXISTING);
+            slots.put(def.id(), slot);
+        }
+        writeCacheSlots(cacheDir, slots);
+    }
+
+    private static Map<String, Integer> readCacheSlots(Path cacheDir) throws IOException {
+        String json = Files.readString(cacheDir.resolve("slots.json"));
+        JsonObject obj = GSON.fromJson(json, JsonObject.class);
+        Map<String, Integer> slots = new LinkedHashMap<>();
+        for (var entry : obj.entrySet()) {
+            slots.put(entry.getKey(), entry.getValue().getAsInt());
+        }
+        return slots;
+    }
+
+    private static void writeCacheSlots(Path cacheDir, Map<String, Integer> slots) throws IOException {
+        JsonObject obj = new JsonObject();
+        slots.forEach((id, slot) -> obj.addProperty(id, slot));
+        Files.writeString(cacheDir.resolve("slots.json"), GSON.toJson(obj));
+    }
+
+    private static void clearOldCaches(String currentSha256) {
+        try (DirectoryStream<Path> dirs = Files.newDirectoryStream(CACHE_ROOT,
+                p -> Files.isDirectory(p) && !p.getFileName().toString().equals(currentSha256))) {
+            for (Path old : dirs) {
+                try (Stream<Path> files = Files.walk(old)) {
+                    files.sorted(Comparator.reverseOrder())
+                            .forEach(p -> {
+                                try { Files.deleteIfExists(p); }
+                                catch (IOException ignored) { }
+                            });
+                } catch (IOException e) {
+                    LOGGER.warn("Failed to clean old cache {}", old.getFileName(), e);
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.warn("Failed to list cache directories for cleanup", e);
         }
     }
 

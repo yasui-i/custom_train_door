@@ -7,8 +7,8 @@ import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorBlock;
 import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -60,7 +60,8 @@ public class TarindoorBlock extends SlidingDoorBlock {
 
     @Override
     public BlockEntityType<? extends SlidingDoorBlockEntity> getBlockEntityType() {
-        return (BlockEntityType<? extends SlidingDoorBlockEntity>) TarindoorRegistry.getBlockEntityType(slot);
+        return (BlockEntityType<? extends SlidingDoorBlockEntity>)
+                TarindoorRegistry.getBlockEntityType(slot);
     }
 
     @Override

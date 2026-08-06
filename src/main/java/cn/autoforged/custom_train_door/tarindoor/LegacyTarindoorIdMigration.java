@@ -99,11 +99,10 @@ public final class LegacyTarindoorIdMigration {
         }
 
         String packId = id.getPath().substring(0, id.getPath().length() - oldSuffix.length());
-        int slot = TarindoorRegistry.getSlot(packId);
-        if (slot < 0) return null;
+        if (TarindoorRegistry.getDefinition(packId) == null) return null;
         return ResourceLocation.fromNamespaceAndPath(
                 CustomTrainDoorMod.MODID,
-                TarindoorRegistry.slotName(slot) + newSuffix
+                packId + "_door" + newSuffix
         ).toString();
     }
 }

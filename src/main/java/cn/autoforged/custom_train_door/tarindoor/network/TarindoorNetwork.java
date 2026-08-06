@@ -81,7 +81,7 @@ public final class TarindoorNetwork {
             output.writeInt(BUNDLE_MAGIC);
             output.writeInt(BUNDLE_VERSION);
             List<TarindoorDefinition> definitions = TarindoorRegistry.getDefinitions().stream()
-                    .sorted(Comparator.comparingInt(def -> TarindoorRegistry.getSlot(def.id())))
+                    .sorted(Comparator.comparing(TarindoorDefinition::id))
                     .toList();
             output.writeInt(definitions.size());
             for (TarindoorDefinition definition : definitions) {
