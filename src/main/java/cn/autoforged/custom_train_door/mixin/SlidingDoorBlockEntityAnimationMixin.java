@@ -21,12 +21,9 @@ public class SlidingDoorBlockEntityAnimationMixin {
         remap = false
     )
     private double custom_train_door$modifyChaseSpeed(double speed) {
-        if ((Object) this instanceof TarindoorBlockEntity) {
-            TarindoorBlockEntity tbe = (TarindoorBlockEntity) (Object) this;
-            if (tbe.getBlockState().getBlock() instanceof TarindoorBlock block) {
-                var definition = block.getDefinition();
-                if (definition != null) return definition.animation().lerpedSpeed();
-            }
+        if ((Object) this instanceof TarindoorBlockEntity tbe) {
+            var definition = tbe.getDefinition();
+            if (definition != null) return definition.animation().lerpedSpeed();
         }
         if ((Object) this instanceof TarindoorPhasedBlockEntity) {
             return 0;

@@ -19,23 +19,14 @@ import java.util.List;
  * Implements a generic keyframe-based animation engine driven by the
  * definition's animation.phases configuration.
  */
-public class TarindoorPhasedBlockEntity extends SlidingDoorBlockEntity {
+public class TarindoorPhasedBlockEntity extends TarindoorBlockEntity {
 
     private int animationTick = 0;
     private boolean wasOpen = false;
     private boolean animationCompleted = true;
 
     public TarindoorPhasedBlockEntity(BlockPos pos, BlockState state) {
-        super(getTypeFor(state), pos, state);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static BlockEntityType<? extends SlidingDoorBlockEntity> getTypeFor(BlockState state) {
-        if (state.getBlock() instanceof TarindoorBlock block) {
-            return (BlockEntityType<? extends SlidingDoorBlockEntity>)
-                    TarindoorRegistry.getBlockEntityType(block.getSlot());
-        }
-        return (BlockEntityType<? extends SlidingDoorBlockEntity>) (Object) BlockEntityType.SIGN;
+        super(pos, state);
     }
 
     @Override
@@ -149,9 +140,6 @@ public class TarindoorPhasedBlockEntity extends SlidingDoorBlockEntity {
     }
 
     private TarindoorDefinition getDef() {
-        if (this.getBlockState().getBlock() instanceof TarindoorBlock block) {
-            return block.getDefinition();
-        }
-        return null;
+        return getDefinition();
     }
 }

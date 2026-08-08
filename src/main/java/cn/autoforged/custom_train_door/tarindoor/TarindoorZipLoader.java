@@ -5,6 +5,7 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.loading.FMLPaths;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,6 +50,12 @@ public class TarindoorZipLoader {
      * other local configuration files.
      */
     public static List<TarindoorDefinition> loadDefinitions(Path dir, boolean createUserFiles) {
+        return loadDefinitions(dir, createUserFiles, false);
+    }
+
+    /** @param skipValidation true for server-synced packs (server already validated) */
+    public static List<TarindoorDefinition> loadDefinitions(Path dir, boolean createUserFiles,
+                                                             boolean skipValidation) {
         List<TarindoorDefinition> result = new ArrayList<>();
         Set<String> seenIds = new HashSet<>();
 
@@ -67,7 +74,7 @@ public class TarindoorZipLoader {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.zip")) {
             for (Path zipPath : stream) {
                 try {
-                    TarindoorDefinition def = loadFromZip(zipPath);
+                    TarindoorDefinition def = loadFromZip(zipPath, skipValidation);
                     if (def != null) {
                         if (!seenIds.add(def.id())) {
                             LOGGER.warn("Duplicate door id '{}' in {}, skipping", def.id(), zipPath.getFileName());
@@ -93,6 +100,10 @@ public class TarindoorZipLoader {
      * Parse a single zip file into a TarindoorDefinition.
      */
     private static TarindoorDefinition loadFromZip(Path zipPath) throws IOException {
+        return loadFromZip(zipPath, false);
+    }
+
+    private static TarindoorDefinition loadFromZip(Path zipPath, boolean skipValidation) throws IOException {
         try (ZipFile zip = new ZipFile(zipPath.toFile())) {
             // 1. Read door.json
             ZipEntry jsonEntry = zip.getEntry("door.json");
@@ -140,21 +151,25 @@ public class TarindoorZipLoader {
             // 7. Parse recipe config (optional)
             TarindoorDefinition.TarindoorRecipeConfig recipeConfig = parseRecipeConfig(root);
 
-            // 8. Validate texture files exist in zip
-            for (String tex : new String[]{"side.png", "top.png", "bottom.png"}) {
-                if (zip.getEntry(tex) == null) {
-                    LOGGER.warn("{} missing required texture {}, skipping", zipPath.getFileName(), tex);
-                    return null;
+            if (!skipValidation) {
+                // 8. Validate texture files exist in zip
+                for (String tex : new String[]{"side.png", "top.png", "bottom.png"}) {
+                    if (zip.getEntry(tex) == null) {
+                        LOGGER.warn("{} missing required texture {}, skipping", zipPath.getFileName(), tex);
+                        return null;
+                    }
                 }
             }
 
             TarindoorDefinition definition =
                     new TarindoorDefinition(id, Map.copyOf(names), animConfig, renderConfig, blockConfig, recipeConfig);
-            validateDefinition(definition);
-            validateReferencedSound(zip, zipPath, definition.block().soundEventOpen(),
-                    definition.block().openSoundFileName(), "open");
-            validateReferencedSound(zip, zipPath, definition.block().soundEventClose(),
-                    definition.block().closeSoundFileName(), "close");
+            if (!skipValidation) {
+                validateDefinition(definition);
+                validateReferencedSound(zip, zipPath, definition.block().soundEventOpen(),
+                        definition.block().openSoundFileName(), "open");
+                validateReferencedSound(zip, zipPath, definition.block().soundEventClose(),
+                        definition.block().closeSoundFileName(), "close");
+            }
             return definition;
         }
     }

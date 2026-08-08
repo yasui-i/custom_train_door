@@ -12,10 +12,13 @@ import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorMovementBeh
 
 import cn.autoforged.custom_train_door.block.CRH2ADoorBlock;
 import cn.autoforged.custom_train_door.block.CRTrainDoorBlock;
+import cn.autoforged.custom_train_door.tarindoor.TarindoorRegistry;
 import cn.autoforged.custom_train_door.tarindoor.block.TarindoorBlock;
+import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
 @Mixin(SlidingDoorMovementBehaviour.class)
 public class SlidingDoorMovementBehaviourTickMixin {
@@ -37,8 +40,13 @@ public class SlidingDoorMovementBehaviourTickMixin {
     private double custom_train_door$modifyChaseSpeed(double speed) {
         MovementContext ctx = CURRENT_CONTEXT.get();
         if (ctx != null) {
-            if (ctx.state.getBlock() instanceof TarindoorBlock tb) {
-                var definition = tb.getDefinition();
+            if (ctx.state.getBlock() instanceof TarindoorBlock) {
+                String doorId = "";
+                StructureTemplate.StructureBlockInfo info = ctx.contraption.getBlocks().get(ctx.localPos);
+                if (info != null && info.nbt() != null) {
+                    doorId = info.nbt().getString("DoorId");
+                }
+                var definition = TarindoorRegistry.getDefinition(doorId);
                 if (definition != null) return definition.animation().lerpedSpeed();
             }
             if (ctx.state.getBlock() instanceof CRTrainDoorBlock) {

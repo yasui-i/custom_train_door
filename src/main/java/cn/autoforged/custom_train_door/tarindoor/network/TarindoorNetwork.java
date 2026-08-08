@@ -85,9 +85,8 @@ public final class TarindoorNetwork {
                     .toList();
             output.writeInt(definitions.size());
             for (TarindoorDefinition definition : definitions) {
-                int slot = TarindoorRegistry.getSlot(definition.id());
                 Path zipPath = TarindoorRegistry.getZipPath(definition);
-                if (slot < 0 || zipPath == null || !Files.isRegularFile(zipPath)) {
+                if (zipPath == null || !Files.isRegularFile(zipPath)) {
                     throw new IOException("Missing source ZIP for door " + definition.id());
                 }
                 long size = Files.size(zipPath);
@@ -96,7 +95,7 @@ public final class TarindoorNetwork {
                             + (MAX_PACK_BYTES / 1024 / 1024) + " MiB");
                 }
                 byte[] zip = Files.readAllBytes(zipPath);
-                output.writeInt(slot);
+                output.writeInt(0); // legacy slot field, always 0
                 output.writeUTF(definition.id());
                 output.writeInt(zip.length);
                 output.write(zip);

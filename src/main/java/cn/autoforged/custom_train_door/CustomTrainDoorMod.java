@@ -7,16 +7,18 @@ import cn.autoforged.custom_train_door.item.ModCreativeTab;
 import cn.autoforged.custom_train_door.item.ModItems;
 import cn.autoforged.custom_train_door.sound.ModSounds;
 import cn.autoforged.custom_train_door.tarindoor.TarindoorRegistry;
+
 import cn.autoforged.custom_train_door.tarindoor.event.TarindoorPackEvents;
+import cn.autoforged.custom_train_door.tarindoor.item.TarindoorBlockItem;
 import cn.autoforged.custom_train_door.tarindoor.network.TarindoorNetwork;
 import com.simibubi.create.api.behaviour.interaction.MovingInteractionBehaviour;
 import com.simibubi.create.api.behaviour.movement.MovementBehaviour;
 import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorMovementBehaviour;
+import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.neoforge.registries.DeferredBlock;
 
 @Mod(CustomTrainDoorMod.MODID)
 public class CustomTrainDoorMod {
@@ -37,10 +39,10 @@ public class CustomTrainDoorMod {
         ModBlockEntities.register(modEventBus);
         TarindoorRegistry.registerBlockEntities(modEventBus);
 
-        // 3. Register BlockItems for tarindoor blocks
-        for (DeferredBlock<?> db : TarindoorRegistry.getOrderedBlocks()) {
-            ModItems.ITEMS.registerSimpleBlockItem(db);
-        }
+        // 3. Register custom BlockItem for the single tarindoor door block
+        ModItems.ITEMS.register("tarindoor_door",
+                () -> new TarindoorBlockItem(TarindoorRegistry.getDoorBlock().get(),
+                        new Item.Properties()));
 
         ModItems.ITEMS.register(modEventBus);
         ModCreativeTab.CREATIVE_TABS.register(modEventBus);
@@ -67,13 +69,11 @@ public class CustomTrainDoorMod {
                     ModBlocks.CRH2A_DOOR.get(),
                     new CustomDoorMovingInteraction());
 
-            // Dynamic tarindoor doors
-            for (DeferredBlock<?> db : TarindoorRegistry.getOrderedBlocks()) {
-                MovementBehaviour.REGISTRY.register(
-                        db.get(), new SlidingDoorMovementBehaviour());
-                MovingInteractionBehaviour.REGISTRY.register(
-                        db.get(), new CustomDoorMovingInteraction());
-            }
+            // Dynamic tarindoor door
+            MovementBehaviour.REGISTRY.register(
+                    TarindoorRegistry.getDoorBlock().get(), new SlidingDoorMovementBehaviour());
+            MovingInteractionBehaviour.REGISTRY.register(
+                    TarindoorRegistry.getDoorBlock().get(), new CustomDoorMovingInteraction());
         });
     }
 }

@@ -28,7 +28,6 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -42,9 +41,8 @@ public final class TarindoorClientSync {
     private static TransferState transfer;
     private static boolean cacheHit;
     private static boolean usingServerPacks;
-    private static volatile boolean pendingReload;
-    private static CompletableFuture<Void> resourceReloadTail =
-            CompletableFuture.completedFuture(null);
+    private static boolean pendingReload;
+    private static int reloadTickDelay;
 
     private TarindoorClientSync() {
     }
@@ -68,19 +66,19 @@ public final class TarindoorClientSync {
 
         // Check content-addressed cache before downloading
         Path cacheDir = getCacheDir(payload.sha256());
-        if (Files.isDirectory(cacheDir) && Files.exists(cacheDir.resolve("slots.json"))) {
+        if (Files.isDirectory(cacheDir) && hasZipFiles(cacheDir)) {
             cacheHit = true;
             transfer = null;
             try {
                 Map<String, Integer> slots = readCacheSlots(cacheDir);
                 TarindoorRegistry.loadSynced(cacheDir, slots);
                 usingServerPacks = true;
-                pendingReload = true;
                 LOGGER.info("Using cached tarindoor bundle {} ({} doors, skipped {} chunks)",
                         payload.sha256(), slots.size(), payload.chunkCount());
                 if (context.connection().isConnected()) {
                     context.reply(new TarindoorSyncAckPayload(payload.syncId()));
                 }
+                // Definitions already loaded from cache — no reload needed
             } catch (Exception e) {
                 LOGGER.error("Failed to load cached tarindoor bundle, will download", e);
                 // Fall through to normal download
@@ -101,17 +99,16 @@ public final class TarindoorClientSync {
                 // Save local packs into cache for future instant loads
                 saveLocalPacksToCache(cacheDir);
                 usingServerPacks = true;
-                pendingReload = true;
                 LOGGER.info("Local tarindoor packs match server hash {}; saved to cache, skipped download",
                         payload.sha256());
             } catch (Exception e) {
                 LOGGER.warn("Failed to save local packs to cache, using local directly", e);
                 usingServerPacks = true;
-                pendingReload = true;
             }
             if (context.connection().isConnected()) {
                 context.reply(new TarindoorSyncAckPayload(payload.syncId()));
             }
+            // Definitions already match — no reload needed
             return;
         }
 
@@ -155,12 +152,13 @@ public final class TarindoorClientSync {
             byte[] bundle = joinAndVerify(state);
             installBundle(bundle, state.digest);
             usingServerPacks = true;
-            pendingReload = true;
-            LOGGER.info("Installed synchronized tarindoor bundle {} ({}); will reload resources after login",
-                    state.id, state.digest);
+            LOGGER.info("Installed synchronized tarindoor bundle {}", state.id);
             if (context.connection().isConnected()) {
                 context.reply(new TarindoorSyncAckPayload(state.id));
             }
+            // Queue resource reload on render thread — executes during
+            // the "joining world" loading screen, before world rendering
+            scheduleReload();
         } catch (IOException | NoSuchAlgorithmException | RuntimeException e) {
             LOGGER.error("Rejected synchronized tarindoor bundle (client will use fallback)", e);
             if (context.connection().isConnected()) {
@@ -203,24 +201,24 @@ try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bundle
                 throw new IOException("Unsupported bundle version");
             }
             int count = input.readInt();
-            if (count < 0 || count > TarindoorRegistry.MAX_SLOTS) {
+            if (count < 0 || count > Integer.MAX_VALUE) {
                 throw new IOException("Invalid door count");
             }
-            
-            Set<Integer> usedSlots = new HashSet<>();
+
+            Set<String> usedIds = new HashSet<>();
             for (int index = 0; index < count; index++) {
-                int slot = input.readInt();
+                int slot = input.readInt(); // ignored — legacy slot field
                 String id = input.readUTF();
                 int length = input.readInt();
-                if (slot < 0 || slot >= TarindoorRegistry.MAX_SLOTS || !usedSlots.add(slot)
-                        || !SAFE_ID.matcher(id).matches() || slots.put(id, slot) != null
+                if (!SAFE_ID.matcher(id).matches() || !usedIds.add(id)
+                        || slots.put(id, 0) != null
                         || length < 0 || length > TarindoorNetwork.MAX_PACK_BYTES) {
                     throw new IOException("Invalid door entry");
                 }
                 byte[] zip = input.readNBytes(length);
                 if (zip.length != length) throw new IOException("Truncated door pack");
-                Path target = cacheDir.resolve(String.format(Locale.ROOT, "slot_%02d.zip", slot));
-                Path temporary = cacheDir.resolve(String.format(Locale.ROOT, "slot_%02d.zip.tmp", slot));
+                Path target = cacheDir.resolve(id + ".zip");
+                Path temporary = cacheDir.resolve(id + ".zip.tmp");
                 Files.write(temporary, zip);
                 try {
                     Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING,
@@ -260,67 +258,51 @@ try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bundle
         if (!usingServerPacks) return;
         usingServerPacks = false;
         TarindoorRegistry.loadAll();
-        queueResourceReload().whenComplete((ignored, error) -> {
-            if (error != null) {
-                LOGGER.error("Failed to restore local tarindoor resources after disconnect", error);
-            } else {
-                LOGGER.info("Restored local tarindoor resources after disconnect");
-            }
-        });
+        LOGGER.info("Restored local tarindoor resources after disconnect");
+    }
+
+    /**
+     * Queue a resource reload on the render thread. Because this is called
+     * during config phase (on the network thread), the reload task gets
+     * queued and executes during the "joining world" loading screen,
+     * before the world is rendered.
+     */
+    private static void scheduleReload() {
+        pendingReload = true;
+        reloadTickDelay = 60; // 3 seconds after first tick
     }
 
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         if (!pendingReload) return;
+        var mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+        if (--reloadTickDelay > 0) return;
         pendingReload = false;
-        LOGGER.info("Triggering deferred resource reload for synchronized tarindoor packs");
-        queueResourceReload().whenComplete((ignored, error) -> {
-            if (error != null) {
-                LOGGER.error("Failed to reload synchronized tarindoor resources (will retry on next manual reload)", error);
-            } else {
-                LOGGER.info("Synchronized tarindoor resources reloaded successfully");
-            }
-        });
-    }
-
-    private static synchronized CompletableFuture<Void> queueResourceReload() {
-        CompletableFuture<Void> next = resourceReloadTail
-                .handle((ignored, previousError) -> null)
-                .thenCompose(ignored -> reloadResourcesOnClientThread());
-        resourceReloadTail = next;
-        next.whenComplete((ignored, error) -> clearCompletedReload(next));
-        return next;
-    }
-
-    private static CompletableFuture<Void> reloadResourcesOnClientThread() {
-        Minecraft minecraft = Minecraft.getInstance();
-        CompletableFuture<Void> result = new CompletableFuture<>();
-        minecraft.execute(() -> {
-            try {
-                minecraft.reloadResourcePacks().whenComplete((ignored, error) -> {
-                    if (error == null) {
-                        result.complete(null);
+        LOGGER.info("Reloading resources for synced tarindoor packs...");
+        mc.reloadResourcePacks()
+                .whenComplete((ignored, error) -> {
+                    if (error != null) {
+                        LOGGER.error("Tarindoor resource reload failed: {}", error.getMessage());
                     } else {
-                        result.completeExceptionally(error);
+                        LOGGER.info("Tarindoor resource reload complete");
+                        mc.levelRenderer.allChanged();
                     }
                 });
-            } catch (RuntimeException error) {
-                result.completeExceptionally(error);
-            }
-        });
-        return result;
-    }
-
-    private static synchronized void clearCompletedReload(CompletableFuture<Void> completed) {
-        if (resourceReloadTail == completed) {
-            resourceReloadTail = CompletableFuture.completedFuture(null);
-        }
     }
 
     // --- Content-addressed cache helpers ---
 
     private static Path getCacheDir(String sha256) {
         return CACHE_ROOT.resolve(sha256);
+    }
+
+    private static boolean hasZipFiles(Path dir) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.zip")) {
+            return stream.iterator().hasNext();
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     @org.jetbrains.annotations.Nullable
@@ -341,15 +323,14 @@ try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bundle
                                 .toList();
                 output.writeInt(sorted.size());
                 for (var def : sorted) {
-                    int slot = TarindoorRegistry.getSlot(def.id());
                     Path zipPath = TarindoorRegistry.getZipPath(def);
-                    if (slot < 0 || zipPath == null || !Files.isRegularFile(zipPath)) {
+                    if (zipPath == null || !Files.isRegularFile(zipPath)) {
                         return null;
                     }
                     long size = Files.size(zipPath);
                     if (size > TarindoorNetwork.MAX_PACK_BYTES) return null;
                     byte[] zip = Files.readAllBytes(zipPath);
-                    output.writeInt(slot);
+                    output.writeInt(0); // legacy slot field, always 0
                     output.writeUTF(def.id());
                     output.writeInt(zip.length);
                     output.write(zip);
@@ -368,12 +349,11 @@ try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bundle
         Files.createDirectories(cacheDir);
         Map<String, Integer> slots = new LinkedHashMap<>();
         for (var def : TarindoorRegistry.getDefinitions()) {
-            int slot = TarindoorRegistry.getSlot(def.id());
             Path zipPath = TarindoorRegistry.getZipPath(def);
-            if (slot < 0 || zipPath == null || !Files.isRegularFile(zipPath)) continue;
-            Path target = cacheDir.resolve(String.format(Locale.ROOT, "slot_%02d.zip", slot));
+            if (zipPath == null || !Files.isRegularFile(zipPath)) continue;
+            Path target = cacheDir.resolve(def.id() + ".zip");
             Files.copy(zipPath, target, StandardCopyOption.REPLACE_EXISTING);
-            slots.put(def.id(), slot);
+            slots.put(def.id(), 0);
         }
         writeCacheSlots(cacheDir, slots);
     }

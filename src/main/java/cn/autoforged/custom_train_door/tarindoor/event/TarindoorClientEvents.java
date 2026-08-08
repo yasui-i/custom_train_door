@@ -15,9 +15,10 @@ public class TarindoorClientEvents {
     @SuppressWarnings({"unchecked", "rawtypes"})
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        for (var holder : TarindoorRegistry.getBlockEntityHolders()) {
-            BlockEntityType type = (BlockEntityType) holder.get();
-            event.registerBlockEntityRenderer(type, ctx -> new TarindoorDoorRenderer(ctx));
-        }
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        BlockEntityType<com.simibubi.create.content.decoration.slidingDoor.SlidingDoorBlockEntity> type =
+                (BlockEntityType<com.simibubi.create.content.decoration.slidingDoor.SlidingDoorBlockEntity>)
+                        (Object) TarindoorRegistry.getDoorBlockEntity().get();
+        event.registerBlockEntityRenderer(type, ctx -> new TarindoorDoorRenderer(ctx));
     }
 }

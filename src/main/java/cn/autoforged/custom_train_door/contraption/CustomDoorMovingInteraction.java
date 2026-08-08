@@ -1,5 +1,7 @@
 package cn.autoforged.custom_train_door.contraption;
 
+import cn.autoforged.custom_train_door.tarindoor.TarindoorRegistry;
+import cn.autoforged.custom_train_door.tarindoor.block.TarindoorBlock;
 import com.simibubi.create.content.contraptions.Contraption;
 import com.simibubi.create.content.contraptions.behaviour.DoorMovingInteraction;
 import net.minecraft.core.BlockPos;
@@ -8,7 +10,10 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.function.Supplier;
 
 /**
  * Uses each custom door's BlockSetType sounds when a player interacts with a
@@ -20,25 +25,53 @@ public class CustomDoorMovingInteraction extends DoorMovingInteraction {
     protected BlockState handle(Player player, Contraption contraption, BlockPos localPos, BlockState state) {
         BlockState updatedState = super.handle(player, contraption, localPos, state);
 
-        // Recursive calls used to update the second half/paired door pass null.
-        // Play exactly once, on the server, so the clicking player is included.
-        if (player != null
-                && !player.level().isClientSide
-                && updatedState != state
+        // Play sound on the server when the door state actually changed
+        if (state.hasProperty(DoorBlock.OPEN)
+                && updatedState.hasProperty(DoorBlock.OPEN)
+                && updatedState.getValue(DoorBlock.OPEN) != state.getValue(DoorBlock.OPEN)
                 && updatedState.getBlock() instanceof DoorBlock door) {
+
             boolean open = updatedState.getValue(DoorBlock.OPEN);
-            SoundEvent sound = open ? door.type().doorOpen() : door.type().doorClose();
-            Vec3 worldPosition = contraption.entity.toGlobalVector(Vec3.atCenterOf(localPos), 0);
-            player.level().playSound(
-                    null,
-                    BlockPos.containing(worldPosition),
-                    sound,
-                    SoundSource.BLOCKS,
-                    1.0F,
-                    player.level().getRandom().nextFloat() * 0.1F + 0.9F);
+            SoundEvent sound = getDoorSound(contraption, localPos, open, door);
+            // Use contraption world for server-side sound
+            if (contraption.entity != null && contraption.entity.level() != null
+                    && !contraption.entity.level().isClientSide) {
+                Vec3 worldPosition = contraption.entity.toGlobalVector(Vec3.atCenterOf(localPos), 0);
+                contraption.entity.level().playSound(
+                        null,
+                        BlockPos.containing(worldPosition),
+                        sound,
+                        SoundSource.BLOCKS,
+                        1.0F,
+                        player != null
+                                ? player.level().getRandom().nextFloat() * 0.1F + 0.9F
+                                : 1.0F);
+            }
         }
 
         return updatedState;
+    }
+
+    private SoundEvent getDoorSound(Contraption contraption, BlockPos localPos,
+                                     boolean open, DoorBlock door) {
+        if (door instanceof TarindoorBlock) {
+            StructureTemplate.StructureBlockInfo info = contraption.getBlocks().get(localPos);
+            if (info != null && info.nbt() != null) {
+                String doorId = info.nbt().getString("DoorId");
+                Supplier<SoundEvent> supplier = open
+                        ? TarindoorRegistry.getOpenSound(doorId)
+                        : TarindoorRegistry.getCloseSound(doorId);
+                if (supplier != null) {
+                    SoundEvent se = supplier.get();
+                    if (se != null) return se;
+                }
+            }
+            // Fallback to default tarindoor sounds
+            return open
+                    ? TarindoorRegistry.getOpenSound("").get()
+                    : TarindoorRegistry.getCloseSound("").get();
+        }
+        return open ? door.type().doorOpen() : door.type().doorClose();
     }
 
     @Override

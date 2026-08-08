@@ -6,29 +6,50 @@ import cn.autoforged.custom_train_door.tarindoor.TarindoorRegistry;
 import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorBlock;
 import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.Nullable;
 
-/**
- * Lerped-animation block entity for tarindoor doors.
- * Uses Create's built-in LerpedFloat chase mechanism with a configurable speed.
- */
 public class TarindoorBlockEntity extends SlidingDoorBlockEntity {
 
+    private String doorId = "";
+
     public TarindoorBlockEntity(BlockPos pos, BlockState state) {
-        super(getTypeFor(state), pos, state);
+        super(getSelfType(), pos, state);
     }
 
     @SuppressWarnings("unchecked")
-    private static BlockEntityType<? extends SlidingDoorBlockEntity> getTypeFor(BlockState state) {
-        if (state.getBlock() instanceof TarindoorBlock block) {
-            return (BlockEntityType<? extends SlidingDoorBlockEntity>)
-                    TarindoorRegistry.getBlockEntityType(block.getSlot());
-        }
-        // fallback — should never happen
-        return (BlockEntityType<? extends SlidingDoorBlockEntity>) (Object)
-                BlockEntityType.SIGN; // dummy, won't actually be used
+    private static BlockEntityType<? extends SlidingDoorBlockEntity> getSelfType() {
+        return (BlockEntityType<? extends SlidingDoorBlockEntity>)
+                TarindoorRegistry.getDoorBlockEntity().get();
+    }
+
+    public String getDoorId() { return doorId; }
+
+    public void setDoorId(String id) {
+        this.doorId = id != null ? id : "";
+        setChanged();
+    }
+
+    @Nullable
+    public TarindoorDefinition getDefinition() {
+        if (doorId.isEmpty()) return null;
+        return TarindoorRegistry.getDefinition(doorId);
+    }
+
+    @Override
+    protected void write(CompoundTag compound, HolderLookup.Provider registries, boolean clientPacket) {
+        super.write(compound, registries, clientPacket);
+        if (!doorId.isEmpty()) compound.putString("DoorId", doorId);
+    }
+
+    @Override
+    protected void read(CompoundTag compound, HolderLookup.Provider registries, boolean clientPacket) {
+        super.read(compound, registries, clientPacket);
+        this.doorId = compound.getString("DoorId");
     }
 
     @Override
@@ -37,7 +58,7 @@ public class TarindoorBlockEntity extends SlidingDoorBlockEntity {
             boolean open = isOpen(this.getBlockState());
             boolean wasSettled = ((SlidingDoorBlockEntityAccessor) this).custom_train_door$getAnimation().settled();
             if (!open && wasSettled && !this.isVisible(this.getBlockState())) {
-                TarindoorDefinition def = getDef();
+                TarindoorDefinition def = getDefinition();
                 if (def != null) {
                     var closeSound = TarindoorRegistry.getCloseSound(def.id());
                     if (closeSound != null) {
@@ -54,12 +75,5 @@ public class TarindoorBlockEntity extends SlidingDoorBlockEntity {
     protected void showBlockModel() {
         this.level.setBlock(this.worldPosition,
                 this.getBlockState().setValue(SlidingDoorBlock.VISIBLE, true), 3);
-    }
-
-    private TarindoorDefinition getDef() {
-        if (this.getBlockState().getBlock() instanceof TarindoorBlock block) {
-            return block.getDefinition();
-        }
-        return null;
     }
 }

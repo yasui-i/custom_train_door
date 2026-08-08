@@ -3,7 +3,8 @@ package cn.autoforged.custom_train_door.tarindoor.block.client;
 import cn.autoforged.custom_train_door.mixin.SlidingDoorBlockEntityAccessor;
 import cn.autoforged.custom_train_door.tarindoor.TarindoorDefinition;
 import cn.autoforged.custom_train_door.tarindoor.TarindoorRegistry;
-import cn.autoforged.custom_train_door.tarindoor.block.TarindoorBlock;
+import cn.autoforged.custom_train_door.tarindoor.block.TarindoorBlockEntity;
+
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorBlock;
@@ -43,16 +44,20 @@ public class TarindoorDoorRenderer extends SafeBlockEntityRenderer<SlidingDoorBl
             float value = ((SlidingDoorBlockEntityAccessor) be).custom_train_door$getAnimation()
                     .getValue(partialTicks);
 
-            // Get render config from definition
-            TarindoorDefinition def = TarindoorRegistry.getDefinition(blockState.getBlock());
+            // Get definition from BlockEntity NBT (single-block system)
+            TarindoorDefinition def = null;
+            if (be instanceof TarindoorBlockEntity tbe) {
+                def = tbe.getDefinition();
+            }
+
             TarindoorDefinition.TarindoorRenderConfig renderCfg;
             if (def != null) {
                 renderCfg = def.render();
             } else {
-                // Fallback — should never happen
                 renderCfg = TarindoorDefinition.TarindoorRenderConfig.cr400bfStyle();
             }
 
+            // Default flat door rendering
             VertexConsumer vb = buffer.getBuffer(RenderType.cutoutMipped());
 
             // Base slide offset
@@ -76,4 +81,5 @@ public class TarindoorDoorRenderer extends SafeBlockEntityRenderer<SlidingDoorBl
             }
         }
     }
+
 }

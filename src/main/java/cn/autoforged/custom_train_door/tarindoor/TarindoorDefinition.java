@@ -131,7 +131,7 @@ public record TarindoorDefinition(
             Map<Character, String> keys,
             int count
     ) {
-        /** 6 iron ingots in 3×2 pattern. */
+        /** 6 iron ingots in 3x2 pattern. */
         public static TarindoorRecipeConfig ironDoor() {
             return new TarindoorRecipeConfig(
                     List.of("II", "II", "II"),

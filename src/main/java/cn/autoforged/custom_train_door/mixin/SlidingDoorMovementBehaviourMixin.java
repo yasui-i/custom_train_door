@@ -77,22 +77,17 @@ public abstract class SlidingDoorMovementBehaviourMixin {
                 boolean isCRH2A = context.state.getBlock() instanceof CRH2ADoorBlock;
                 boolean isTarindoor = context.state.getBlock() instanceof TarindoorBlock;
                 if (isTarindoor) {
-                    TarindoorBlock tb = (TarindoorBlock) context.state.getBlock();
-                    var definition = tb.getDefinition();
-                    if (definition == null) return;
-                    String id = definition.id();
-                    if (shouldOpen) {
-                        var snd = TarindoorRegistry.getOpenSound(id);
-                        if (snd != null) {
-                            context.world.playSound(null, BlockPos.containing(context.position),
-                                    snd.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
-                        }
-                    } else {
-                        var snd = TarindoorRegistry.getCloseSound(id);
-                        if (snd != null) {
-                            context.world.playSound(null, BlockPos.containing(context.position),
-                                    snd.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
-                        }
+                    String doorId = "";
+                    StructureTemplate.StructureBlockInfo tarInfo = contraption.getBlocks().get(context.localPos);
+                    if (tarInfo != null && tarInfo.nbt() != null) {
+                        doorId = tarInfo.nbt().getString("DoorId");
+                    }
+                    var snd = shouldOpen
+                            ? TarindoorRegistry.getOpenSound(doorId)
+                            : TarindoorRegistry.getCloseSound(doorId);
+                    if (snd != null) {
+                        context.world.playSound(null, BlockPos.containing(context.position),
+                                snd.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
                     }
                 } else if (shouldOpen) {
                     context.world.playSound(null, BlockPos.containing(context.position),
